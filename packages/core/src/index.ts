@@ -9,6 +9,27 @@
 // Version export for debugging
 export const VERSION = "0.1.0";
 
+// Re-export services
+export {
+  FileManager,
+  FileNotFoundError,
+  ValidationError,
+  // Zod schemas
+  ConfigSchema,
+  TaskSchema,
+  PRDSchema,
+  ProgressSchema,
+  BattleSchema,
+  IterationSchema,
+  ExecutionModeSchema,
+  TaskStatusSchema,
+  ProgressStatusSchema,
+  BattleStatusSchema,
+  FeedbackResultSchema,
+  FeedbackResultsSchema,
+  PRDMetadataSchema,
+} from "./services/index.ts";
+
 // Re-export all types
 export {
   // Configuration
