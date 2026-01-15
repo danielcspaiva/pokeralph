@@ -24,7 +24,8 @@ import {
   cancelBattle,
   approveBattle,
 } from "@/api/client.ts";
-import { TaskStatus, type Task, type Progress, type FeedbackResult } from "@pokeralph/core";
+import type { Task, Progress, FeedbackResult } from "@pokeralph/core";
+import { TaskStatus } from "@/constants/task-status.ts";
 import styles from "./Battle.module.css";
 
 // ==========================================================================

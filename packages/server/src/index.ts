@@ -217,11 +217,8 @@ export function resetServerState(): void {
 // Create app for testing (does not start server)
 const app = createApp();
 
-// Default export for Bun.serve compatibility and testing
-export default {
-  port: Number(process.env.PORT) || 3456,
-  fetch: app.fetch,
-};
+// Export app for testing - use startServer() to actually run the server
+export { app };
 
 // Start server if this file is run directly
 if (import.meta.main) {

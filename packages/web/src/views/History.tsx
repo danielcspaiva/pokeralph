@@ -17,7 +17,8 @@ import {
   getBattleHistory,
   startBattle,
 } from "@/api/client.ts";
-import { TaskStatus, type Task, type Battle, type Iteration, type IterationResult } from "@pokeralph/core";
+import type { Task, Battle, Iteration, IterationResult } from "@pokeralph/core";
+import { TaskStatus } from "@/constants/task-status.ts";
 import styles from "./History.module.css";
 
 // ==========================================================================

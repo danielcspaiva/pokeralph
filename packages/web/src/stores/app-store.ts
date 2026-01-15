@@ -19,15 +19,16 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import {
-  type Config,
-  type PRD,
-  type Task,
-  type Progress,
-  type Battle,
-  type ExecutionMode,
-  TaskStatus,
+import { useShallow } from "zustand/react/shallow";
+import type {
+  Config,
+  PRD,
+  Task,
+  Progress,
+  Battle,
+  ExecutionMode,
 } from "@pokeralph/core";
+import { TaskStatus } from "../constants/task-status.ts";
 import {
   getWebSocketClient,
   type WebSocketEventPayloads,
@@ -439,23 +440,25 @@ export const usePlanningOutput = () =>
  * Select task counts by status
  */
 export const useTaskCounts = () =>
-  useAppStore((state) => {
-    const counts = {
-      total: state.tasks.length,
-      pending: 0,
-      planning: 0,
-      in_progress: 0,
-      paused: 0,
-      completed: 0,
-      failed: 0,
-    };
+  useAppStore(
+    useShallow((state) => {
+      const counts = {
+        total: state.tasks.length,
+        pending: 0,
+        planning: 0,
+        in_progress: 0,
+        paused: 0,
+        completed: 0,
+        failed: 0,
+      };
 
-    for (const task of state.tasks) {
-      counts[task.status]++;
-    }
+      for (const task of state.tasks) {
+        counts[task.status]++;
+      }
 
-    return counts;
-  });
+      return counts;
+    })
+  );
 
 /**
  * Select the next pending task (highest priority)
