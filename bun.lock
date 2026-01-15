@@ -38,6 +38,7 @@
       "name": "@pokeralph/web",
       "version": "0.1.0",
       "dependencies": {
+        "@pokeralph/core": "workspace:*",
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "react-router-dom": "^7.1.2",
