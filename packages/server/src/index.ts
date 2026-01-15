@@ -11,6 +11,12 @@ import { logger } from "hono/logger";
 import { VERSION, Orchestrator } from "@pokeralph/core";
 import { createRoutes } from "./routes/index.ts";
 import { globalErrorHandler, notFoundHandler } from "./middleware/index.ts";
+import {
+  createWebSocketHandlers,
+  getWebSocketManager,
+  resetWebSocketManager,
+  type WebSocketData,
+} from "./websocket/index.ts";
 
 /**
  * Server configuration
@@ -107,6 +113,11 @@ async function shutdown(signal: string): Promise<void> {
   state.isShuttingDown = true;
   console.log(`\n[Server] Received ${signal}, shutting down gracefully...`);
 
+  // Close WebSocket connections
+  console.log("[Server] Closing WebSocket connections...");
+  const wsManager = getWebSocketManager();
+  wsManager.close();
+
   // Stop accepting new connections
   if (state.server) {
     console.log("[Server] Stopping server...");
@@ -126,30 +137,60 @@ async function shutdown(signal: string): Promise<void> {
 }
 
 /**
- * Starts the server
+ * Starts the server with WebSocket support
  */
 export function startServer(config: Partial<ServerConfig> = {}): ReturnType<typeof Bun.serve> {
   const port = config.port ?? (Number(process.env.PORT) || 3456);
   const workingDir = config.workingDir ?? process.cwd();
 
   // Initialize orchestrator
-  initializeOrchestrator(workingDir);
+  const orchestrator = initializeOrchestrator(workingDir);
+
+  // Set up WebSocket manager with orchestrator events
+  const wsManager = getWebSocketManager();
+  wsManager.setupOrchestrator(orchestrator);
 
   // Create app
   const app = createApp();
+
+  // Get WebSocket handlers
+  const wsHandlers = createWebSocketHandlers();
 
   // Register shutdown handlers
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
 
-  // Start server
+  // Start server with WebSocket support
   console.log(`[Server] PokéRalph v${VERSION} starting...`);
   console.log(`[Server] Working directory: ${workingDir}`);
   console.log(`[Server] Listening on http://localhost:${port}`);
+  console.log(`[Server] WebSocket available at ws://localhost:${port}/ws`);
 
-  const server = Bun.serve({
+  const server = Bun.serve<WebSocketData>({
     port,
-    fetch: app.fetch,
+    fetch(req, server) {
+      // Check if this is a WebSocket upgrade request
+      const url = new URL(req.url);
+      if (url.pathname === "/ws") {
+        // Upgrade to WebSocket
+        const upgraded = server.upgrade(req, {
+          data: {
+            id: "",
+            lastPing: Date.now(),
+            isAlive: true,
+          },
+        });
+        if (upgraded) {
+          return undefined;
+        }
+        // Upgrade failed
+        return new Response("WebSocket upgrade failed", { status: 400 });
+      }
+
+      // Handle HTTP requests via Hono
+      return app.fetch(req);
+    },
+    websocket: wsHandlers,
   });
 
   state.server = server;
@@ -167,6 +208,7 @@ export function getServerState(): Readonly<ServerState> {
  * Resets server state (for testing)
  */
 export function resetServerState(): void {
+  resetWebSocketManager();
   state.orchestrator = null;
   state.server = null;
   state.isShuttingDown = false;
