@@ -51,6 +51,13 @@ export {
   type CommitInfo,
 } from "./git-service.ts";
 
+// BattleOrchestrator - orchestrates the Battle Loop for tasks
+export {
+  BattleOrchestrator,
+  type BattleOrchestratorDependencies,
+  type BattleOrchestratorEvents,
+} from "./battle-orchestrator.ts";
+
 // Custom error classes
 export { FileNotFoundError, ValidationError } from "./errors.ts";
 

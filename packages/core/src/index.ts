@@ -43,6 +43,10 @@ export {
   type FileStatus,
   type GitStatus,
   type CommitInfo,
+  // BattleOrchestrator
+  BattleOrchestrator,
+  type BattleOrchestratorDependencies,
+  type BattleOrchestratorEvents,
   // Zod schemas
   ConfigSchema,
   TaskSchema,
