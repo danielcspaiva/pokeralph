@@ -9,6 +9,7 @@ import { VERSION } from "@pokeralph/core";
 import { createConfigRoutes } from "./config.ts";
 import { createPRDRoutes } from "./prd.ts";
 import { createPlanningRoutes } from "./planning.ts";
+import { createBattleRoutes } from "./battle.ts";
 
 /**
  * Creates the main API router with all routes grouped.
@@ -28,7 +29,8 @@ export function createRoutes(): Hono {
         tasks: "GET/POST /api/prd/tasks, GET/PUT/DELETE /api/prd/tasks/:id",
         planning:
           "POST /api/planning/start, /answer, /finish, /reset; GET /api/planning/status",
-        battle: "POST /api/battle/start/:taskId, /pause, /resume, /cancel, /approve",
+        battle:
+          "POST /api/battle/start/:taskId, /pause, /resume, /cancel, /approve; GET /api/battle/current, /:taskId/progress, /:taskId/history",
       },
     });
   });
@@ -46,9 +48,8 @@ export function createRoutes(): Hono {
   api.route("/planning", planningRoutes);
 
   // Battle routes (Task 016)
-  api.post("/battle/start/:taskId", (c) => {
-    return c.json({ message: "Battle endpoint - not yet implemented" }, 501);
-  });
+  const battleRoutes = createBattleRoutes();
+  api.route("/battle", battleRoutes);
 
   return api;
 }

@@ -498,6 +498,47 @@ export class Orchestrator {
   }
 
   /**
+   * Checks if a battle is currently running
+   *
+   * @returns True if a battle is in progress and not paused
+   */
+  isBattleRunning(): boolean {
+    return this.battleOrchestrator.isRunning();
+  }
+
+  /**
+   * Checks if a battle is currently paused
+   *
+   * @returns True if a battle is paused
+   */
+  isBattlePaused(): boolean {
+    return this.battleOrchestrator.isPaused();
+  }
+
+  /**
+   * Checks if a battle is awaiting HITL approval
+   *
+   * @returns True if awaiting approval
+   */
+  isBattleAwaitingApproval(): boolean {
+    return this.battleOrchestrator.isAwaitingApproval();
+  }
+
+  /**
+   * Gets the current battle state
+   *
+   * @returns Battle state info or null if no battle running
+   */
+  getCurrentBattleState(): {
+    taskId: string;
+    iteration: number;
+    status: string;
+    mode: ExecutionMode;
+  } | null {
+    return this.battleOrchestrator.getCurrentState();
+  }
+
+  /**
    * Registers a listener for battle events
    *
    * @param event - The event name

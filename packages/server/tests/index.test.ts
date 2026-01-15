@@ -108,13 +108,16 @@ describe("@pokeralph/server", () => {
       expect(data.error).toBe("SERVICE_UNAVAILABLE");
     });
 
-    test("POST /api/battle/start/:taskId returns 501 (not yet implemented)", async () => {
+    test("POST /api/battle/start/:taskId returns 503 (orchestrator not initialized)", async () => {
       const res = await app.fetch(
         new Request("http://localhost/api/battle/start/task-001", {
           method: "POST",
         })
       );
-      expect(res.status).toBe(501);
+      expect(res.status).toBe(503);
+
+      const data = await res.json();
+      expect(data.error).toBe("SERVICE_UNAVAILABLE");
     });
   });
 
