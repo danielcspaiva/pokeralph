@@ -1,3 +1,8 @@
+/**
+ * Global styles for PokéRalph
+ * Wireframe style: simple borders, neutral colors
+ */
+
 *,
 *::before,
 *::after {
@@ -26,12 +31,32 @@ body {
 
 #root {
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  padding: 2rem;
 }
 
-h1 {
-  font-size: 2rem;
-  margin-bottom: 0.5rem;
+/* Base button styles */
+button {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Base link styles */
+a {
+  color: #0066cc;
+}
+
+a:hover {
+  color: #004c99;
+}
+
+/* Utility classes */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
