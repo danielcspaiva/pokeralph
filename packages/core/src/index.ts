@@ -31,6 +31,12 @@ export {
   ProgressWatcher,
   type ProgressWatcherOptions,
   type ProgressWatcherEvents,
+  // FeedbackRunner
+  FeedbackRunner,
+  type FeedbackRunnerOptions,
+  type FeedbackLoopResult,
+  STANDARD_LOOPS,
+  type StandardLoop,
   // Zod schemas
   ConfigSchema,
   TaskSchema,

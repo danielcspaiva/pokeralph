@@ -33,6 +33,15 @@ export {
   type ProgressWatcherEvents,
 } from "./progress-watcher.ts";
 
+// FeedbackRunner - executes feedback loops (test, lint, typecheck)
+export {
+  FeedbackRunner,
+  type FeedbackRunnerOptions,
+  type FeedbackLoopResult,
+  STANDARD_LOOPS,
+  type StandardLoop,
+} from "./feedback-runner.ts";
+
 // Custom error classes
 export { FileNotFoundError, ValidationError } from "./errors.ts";
 
