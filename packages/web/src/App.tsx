@@ -6,20 +6,7 @@
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout.tsx";
-
-/**
- * Placeholder Dashboard view (full implementation in Task 022)
- */
-function Dashboard() {
-  return (
-    <div>
-      <h2>Dashboard</h2>
-      <p style={{ color: "#666", marginTop: "0.5rem" }}>
-        Project overview coming in Task 022.
-      </p>
-    </div>
-  );
-}
+import { Dashboard } from "@/views/Dashboard.tsx";
 
 /**
  * Placeholder Planning view (full implementation in Task 023)
