@@ -14,6 +14,13 @@ export {
   FileManager,
   FileNotFoundError,
   ValidationError,
+  // PromptBuilder
+  PromptBuilder,
+  type TaskContext,
+  PRD_OUTPUT_SCHEMA,
+  TASKS_OUTPUT_SCHEMA,
+  PROGRESS_UPDATE_SCHEMA,
+  COMPLETION_SIGIL,
   // Zod schemas
   ConfigSchema,
   TaskSchema,

@@ -7,6 +7,16 @@
 // FileManager - handles all file I/O for .pokeralph/ folder
 export { FileManager } from "./file-manager.ts";
 
+// PromptBuilder - constructs optimized prompts for Claude Code
+export {
+  PromptBuilder,
+  type TaskContext,
+  PRD_OUTPUT_SCHEMA,
+  TASKS_OUTPUT_SCHEMA,
+  PROGRESS_UPDATE_SCHEMA,
+  COMPLETION_SIGIL,
+} from "./prompt-builder.ts";
+
 // Custom error classes
 export { FileNotFoundError, ValidationError } from "./errors.ts";
 
