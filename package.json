@@ -1,12 +1,21 @@
 {
   "name": "pokeralph",
-  "module": "index.ts",
+  "version": "0.1.0",
   "type": "module",
   "private": true,
-  "devDependencies": {
-    "@types/bun": "latest"
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "dev": "echo 'Dev script - implemented in Task 027'",
+    "build": "bun run --filter '*' build",
+    "test": "bun run --filter '*' test",
+    "lint": "bunx @biomejs/biome lint .",
+    "format": "bunx @biomejs/biome format --write .",
+    "format:check": "bunx @biomejs/biome format .",
+    "typecheck": "bun run --filter '*' typecheck"
   },
-  "peerDependencies": {
-    "typescript": "^5"
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/bun": "latest",
+    "typescript": "^5.7.3"
   }
 }

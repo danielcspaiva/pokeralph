@@ -72,7 +72,7 @@ packages/
 ├── core/                    # @pokeralph/core
 │   ├── src/
 │   │   ├── types/           # Domain interfaces (PRD, Task, Config, etc.)
-│   │   ├── services/        # FileManager, ClaudeBridge, LoopController, etc.
+│   │   ├── services/        # FileManager, ClaudeBridge, BattleOrchestrator, etc.
 │   │   ├── utils/           # Pure helpers
 │   │   └── orchestrator.ts  # Main facade
 │   └── tests/
@@ -119,7 +119,7 @@ The `@pokeralph/core` package contains these services:
 | ProgressWatcher | Polls progress.json, emits events |
 | FeedbackRunner | Runs test/lint/typecheck loops |
 | GitService | Git commit, status, revert |
-| LoopController | Orchestrates full Ralph loop |
+| BattleOrchestrator | Orchestrates Battle Loop for tasks |
 | PlanService | Handles planning phase |
 | Orchestrator | Main facade unifying all services |
 
