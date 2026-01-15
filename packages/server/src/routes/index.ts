@@ -6,6 +6,7 @@
 
 import { Hono } from "hono";
 import { VERSION } from "@pokeralph/core";
+import { createConfigRoutes } from "./config.ts";
 
 /**
  * Creates the main API router with all routes grouped.
@@ -29,15 +30,9 @@ export function createRoutes(): Hono {
     });
   });
 
-  // Placeholder routes - will be implemented in Tasks 013-016
   // Config routes (Task 013)
-  api.get("/config", (c) => {
-    return c.json({ message: "Config endpoint - not yet implemented" }, 501);
-  });
-
-  api.put("/config", (c) => {
-    return c.json({ message: "Config endpoint - not yet implemented" }, 501);
-  });
+  const configRoutes = createConfigRoutes();
+  api.route("/config", configRoutes);
 
   // PRD routes (Task 014)
   api.get("/prd", (c) => {

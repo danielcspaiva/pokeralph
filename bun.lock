@@ -27,6 +27,7 @@
       "dependencies": {
         "@pokeralph/core": "workspace:*",
         "hono": "^4.7.2",
+        "zod": "^3.24.1",
       },
       "devDependencies": {
         "@types/bun": "latest",

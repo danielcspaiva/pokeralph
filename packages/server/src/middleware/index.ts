@@ -4,6 +4,7 @@
 
 export {
   errorHandler,
+  globalErrorHandler,
   notFoundHandler,
   AppError,
   type ErrorResponse,

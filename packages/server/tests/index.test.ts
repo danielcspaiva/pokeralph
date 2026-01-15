@@ -37,23 +37,27 @@ describe("@pokeralph/server", () => {
       expect(data.endpoints.health).toBe("GET /health");
     });
 
-    test("GET /api/config returns 501 (not yet implemented)", async () => {
+    test("GET /api/config returns 503 when orchestrator not initialized", async () => {
       const res = await app.fetch(new Request("http://localhost/api/config"));
-      expect(res.status).toBe(501);
+      expect(res.status).toBe(503);
 
       const data = await res.json();
-      expect(data.message).toContain("not yet implemented");
+      expect(data.error).toBe("SERVICE_UNAVAILABLE");
+      expect(data.message).toContain("Orchestrator not initialized");
     });
 
-    test("PUT /api/config returns 501 (not yet implemented)", async () => {
+    test("PUT /api/config returns 503 when orchestrator not initialized", async () => {
       const res = await app.fetch(
         new Request("http://localhost/api/config", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify({ maxIterationsPerTask: 20 }),
         })
       );
-      expect(res.status).toBe(501);
+      expect(res.status).toBe(503);
+
+      const data = await res.json();
+      expect(data.error).toBe("SERVICE_UNAVAILABLE");
     });
 
     test("GET /api/prd returns 501 (not yet implemented)", async () => {

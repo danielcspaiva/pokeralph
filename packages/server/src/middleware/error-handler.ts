@@ -54,43 +54,71 @@ function createErrorResponse(
  * Catches all errors and returns consistent JSON responses.
  * Logs errors to console for debugging.
  */
-export async function errorHandler(c: Context, next: Next): Promise<Response | undefined> {
-  try {
-    await next();
-  } catch (err) {
-    // Handle known application errors
-    if (err instanceof AppError) {
-      console.error(`[AppError] ${err.code}: ${err.message}`);
-      return c.json(createErrorResponse(err.status, err.code, err.message), err.status);
-    }
+/**
+ * Type guard to check if error is an AppError (duck typing for cross-module compatibility)
+ */
+function isAppError(err: unknown): err is AppError {
+  if (err instanceof AppError) {
+    return true;
+  }
+  // Fallback: check by name and properties for cross-module compatibility
+  if (
+    err &&
+    typeof err === "object" &&
+    "name" in err &&
+    err.name === "AppError" &&
+    "status" in err &&
+    "code" in err &&
+    "message" in err
+  ) {
+    return true;
+  }
+  return false;
+}
 
-    // Handle Zod validation errors (from @pokeralph/core)
-    if (err && typeof err === "object" && "issues" in err) {
-      const zodError = err as { issues: Array<{ message: string; path: (string | number)[] }> };
-      const message = zodError.issues
-        .map((i) => `${i.path.join(".")}: ${i.message}`)
-        .join("; ");
-      console.error(`[ValidationError] ${message}`);
-      return c.json(createErrorResponse(400, "VALIDATION_ERROR", message), 400);
-    }
-
-    // Handle standard errors
-    if (err instanceof Error) {
-      console.error(`[Error] ${err.name}: ${err.message}`);
-      console.error(err.stack);
-      return c.json(
-        createErrorResponse(500, "INTERNAL_ERROR", err.message),
-        500
-      );
-    }
-
-    // Handle unknown errors
-    console.error("[Error] Unknown error:", err);
+/**
+ * Global error handler for Hono app.onError
+ *
+ * Use this with app.onError(globalErrorHandler) to catch all errors.
+ */
+export function globalErrorHandler(err: Error, c: Context): Response {
+  // Handle known application errors
+  if (isAppError(err)) {
+    console.error(`[AppError] ${err.code}: ${err.message}`);
     return c.json(
-      createErrorResponse(500, "INTERNAL_ERROR", "An unexpected error occurred"),
-      500
+      createErrorResponse(err.status, err.code, err.message),
+      err.status as ContentfulStatusCode
     );
   }
+
+  // Handle Zod validation errors (from @pokeralph/core)
+  if (err && typeof err === "object" && "issues" in err) {
+    const zodError = err as unknown as { issues: Array<{ message: string; path: (string | number)[] }> };
+    const message = zodError.issues
+      .map((i) => `${i.path.join(".")}: ${i.message}`)
+      .join("; ");
+    console.error(`[ValidationError] ${message}`);
+    return c.json(createErrorResponse(400, "VALIDATION_ERROR", message), 400);
+  }
+
+  // Handle standard errors
+  console.error(`[Error] ${err.name}: ${err.message}`);
+  console.error(err.stack);
+  return c.json(
+    createErrorResponse(500, "INTERNAL_ERROR", err.message),
+    500
+  );
+}
+
+/**
+ * Error handling middleware (placeholder for future use)
+ *
+ * Note: Hono's internal error handling catches errors from async handlers
+ * before they propagate to middleware try/catch blocks. Use app.onError()
+ * with globalErrorHandler instead for catching thrown errors.
+ */
+export async function errorHandler(_c: Context, next: Next): Promise<void> {
+  await next();
 }
 
 /**

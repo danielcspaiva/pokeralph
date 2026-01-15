@@ -10,7 +10,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { VERSION, Orchestrator } from "@pokeralph/core";
 import { createRoutes } from "./routes/index.ts";
-import { errorHandler, notFoundHandler } from "./middleware/index.ts";
+import { globalErrorHandler, notFoundHandler } from "./middleware/index.ts";
 
 /**
  * Server configuration
@@ -42,8 +42,8 @@ const state: ServerState = {
 export function createApp(): Hono {
   const app = new Hono();
 
-  // Error handling middleware (must be first)
-  app.use("*", errorHandler);
+  // Global error handler - catches all thrown errors
+  app.onError(globalErrorHandler);
 
   // Logging middleware
   app.use("*", logger());
