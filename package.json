@@ -5,7 +5,7 @@
   "private": true,
   "workspaces": ["packages/*"],
   "scripts": {
-    "dev": "echo 'Dev script - implemented in Task 027'",
+    "dev": "bun run scripts/dev.ts",
     "build": "bun run --filter '*' build",
     "test": "bun run --filter '*' test",
     "lint": "bunx @biomejs/biome lint .",
