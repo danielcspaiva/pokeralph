@@ -17,6 +17,15 @@ export {
   COMPLETION_SIGIL,
 } from "./prompt-builder.ts";
 
+// ClaudeBridge - spawns and monitors Claude Code CLI
+export {
+  ClaudeBridge,
+  type ClaudeBridgeOptions,
+  type ClaudeMode,
+  type ExitCallback,
+  type OutputCallback,
+} from "./claude-bridge.ts";
+
 // Custom error classes
 export { FileNotFoundError, ValidationError } from "./errors.ts";
 

@@ -21,6 +21,12 @@ export {
   TASKS_OUTPUT_SCHEMA,
   PROGRESS_UPDATE_SCHEMA,
   COMPLETION_SIGIL,
+  // ClaudeBridge
+  ClaudeBridge,
+  type ClaudeBridgeOptions,
+  type ClaudeMode,
+  type ExitCallback,
+  type OutputCallback,
   // Zod schemas
   ConfigSchema,
   TaskSchema,
