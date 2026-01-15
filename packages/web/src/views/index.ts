@@ -5,3 +5,4 @@
 export { Dashboard } from "./Dashboard.tsx";
 export { Planning } from "./Planning.tsx";
 export { Battle } from "./Battle.tsx";
+export { History } from "./History.tsx";

@@ -6,21 +6,7 @@
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout.tsx";
-import { Dashboard, Planning, Battle } from "@/views/index.ts";
-
-/**
- * Placeholder History view (full implementation in Task 025)
- */
-function History() {
-  return (
-    <div>
-      <h2>Task History</h2>
-      <p style={{ color: "#666", marginTop: "0.5rem" }}>
-        Task history view coming in Task 025.
-      </p>
-    </div>
-  );
-}
+import { Dashboard, Planning, Battle, History } from "@/views/index.ts";
 
 /**
  * Main application component with routing
