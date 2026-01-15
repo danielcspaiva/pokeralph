@@ -409,6 +409,40 @@ export class Orchestrator {
     return await this.planService.finishPlanning();
   }
 
+  /**
+   * Gets the current planning state
+   *
+   * @returns The current planning state
+   */
+  getPlanningState(): "idle" | "planning" | "waiting_input" | "completed" {
+    return this.planService.getState();
+  }
+
+  /**
+   * Gets the pending question (if any)
+   *
+   * @returns The pending question or null
+   */
+  getPlanningQuestion(): string | null {
+    return this.planService.getPendingQuestion();
+  }
+
+  /**
+   * Checks if a planning session is currently in progress
+   *
+   * @returns True if planning is in progress
+   */
+  isPlanning(): boolean {
+    return this.planService.isPlanning();
+  }
+
+  /**
+   * Resets the planning service to idle state
+   */
+  resetPlanning(): void {
+    this.planService.reset();
+  }
+
   // ==========================================================================
   // Battle Management (delegates to BattleOrchestrator)
   // ==========================================================================

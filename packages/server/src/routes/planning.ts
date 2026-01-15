@@ -1,0 +1,248 @@
+/**
+ * Planning routes for PokéRalph server
+ *
+ * Provides endpoints for the planning phase where users describe ideas
+ * and Claude helps refine them into a structured PRD.
+ */
+
+import { Hono } from "hono";
+import { z } from "zod";
+import { getOrchestrator } from "../index.ts";
+import { AppError } from "../middleware/error-handler.ts";
+
+/**
+ * Schema for starting a planning session
+ */
+const StartPlanningSchema = z.object({
+  idea: z.string().min(1, "Idea is required"),
+});
+
+/**
+ * Schema for answering a question during planning
+ */
+const AnswerQuestionSchema = z.object({
+  answer: z.string().min(1, "Answer is required"),
+});
+
+/**
+ * Ensures orchestrator is available, throws 503 if not
+ */
+function requireOrchestrator() {
+  const orchestrator = getOrchestrator();
+  if (!orchestrator) {
+    throw new AppError(
+      "Orchestrator not initialized. Server may still be starting.",
+      503,
+      "SERVICE_UNAVAILABLE"
+    );
+  }
+  return orchestrator;
+}
+
+/**
+ * Creates the planning router with all planning phase endpoints
+ */
+export function createPlanningRoutes(): Hono {
+  const router = new Hono();
+
+  /**
+   * GET /api/planning/status
+   *
+   * Returns the current planning state.
+   *
+   * @returns {{ state: PlanningState, pendingQuestion: string | null }}
+   * @throws {503} If orchestrator is not initialized
+   */
+  router.get("/status", (c) => {
+    const orchestrator = requireOrchestrator();
+
+    const state = orchestrator.getPlanningState();
+    const pendingQuestion = orchestrator.getPlanningQuestion();
+
+    return c.json({
+      state,
+      pendingQuestion,
+      isPlanning: orchestrator.isPlanning(),
+    });
+  });
+
+  /**
+   * POST /api/planning/start
+   *
+   * Starts a new planning session with the given idea.
+   *
+   * @param {string} body.idea - The initial idea to refine
+   * @returns {{ message: string, state: string }}
+   * @throws {400} If validation fails
+   * @throws {409} If planning already in progress
+   * @throws {503} If orchestrator is not initialized
+   */
+  router.post("/start", async (c) => {
+    const orchestrator = requireOrchestrator();
+
+    // Check if already planning
+    if (orchestrator.isPlanning()) {
+      throw new AppError(
+        "Planning session already in progress. Finish or reset the current session first.",
+        409,
+        "PLANNING_IN_PROGRESS"
+      );
+    }
+
+    // Parse and validate request body
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      throw new AppError("Invalid JSON body", 400, "INVALID_JSON");
+    }
+
+    const parseResult = StartPlanningSchema.safeParse(body);
+    if (!parseResult.success) {
+      const errors = parseResult.error.errors.map((e) => ({
+        path: e.path.join("."),
+        message: e.message,
+      }));
+      throw new AppError(
+        `Validation failed: ${errors.map((e) => `${e.path}: ${e.message}`).join("; ")}`,
+        400,
+        "VALIDATION_ERROR"
+      );
+    }
+
+    const { idea } = parseResult.data;
+
+    // Start planning (async - doesn't wait for Claude to finish)
+    await orchestrator.startPlanning(idea);
+
+    return c.json({
+      message: "Planning session started",
+      idea,
+      state: orchestrator.getPlanningState(),
+    });
+  });
+
+  /**
+   * POST /api/planning/answer
+   *
+   * Sends an answer to Claude's question during planning.
+   *
+   * @param {string} body.answer - The user's answer
+   * @returns {{ message: string, state: string }}
+   * @throws {400} If validation fails or not waiting for input
+   * @throws {409} If not in waiting_input state
+   * @throws {503} If orchestrator is not initialized
+   */
+  router.post("/answer", async (c) => {
+    const orchestrator = requireOrchestrator();
+
+    // Check if we're waiting for input
+    const state = orchestrator.getPlanningState();
+    if (state !== "waiting_input") {
+      throw new AppError(
+        `Not waiting for input. Current state: ${state}`,
+        409,
+        "NOT_WAITING_INPUT"
+      );
+    }
+
+    // Parse and validate request body
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      throw new AppError("Invalid JSON body", 400, "INVALID_JSON");
+    }
+
+    const parseResult = AnswerQuestionSchema.safeParse(body);
+    if (!parseResult.success) {
+      const errors = parseResult.error.errors.map((e) => ({
+        path: e.path.join("."),
+        message: e.message,
+      }));
+      throw new AppError(
+        `Validation failed: ${errors.map((e) => `${e.path}: ${e.message}`).join("; ")}`,
+        400,
+        "VALIDATION_ERROR"
+      );
+    }
+
+    const { answer } = parseResult.data;
+
+    // Send answer to Claude
+    await orchestrator.answerPlanningQuestion(answer);
+
+    return c.json({
+      message: "Answer sent",
+      state: orchestrator.getPlanningState(),
+    });
+  });
+
+  /**
+   * POST /api/planning/finish
+   *
+   * Finalizes the planning phase and extracts the PRD.
+   *
+   * @returns {{ message: string, prd: PRD }}
+   * @throws {409} If no planning session to finish
+   * @throws {500} If PRD extraction fails
+   * @throws {503} If orchestrator is not initialized
+   */
+  router.post("/finish", async (c) => {
+    const orchestrator = requireOrchestrator();
+
+    // Check state
+    const state = orchestrator.getPlanningState();
+    if (state === "idle") {
+      throw new AppError(
+        "No planning session to finish. Start a planning session first.",
+        409,
+        "NO_PLANNING_SESSION"
+      );
+    }
+
+    try {
+      // Finish planning and extract PRD
+      const prd = await orchestrator.finishPlanning();
+
+      // Save the PRD
+      await orchestrator.savePRD(prd);
+
+      return c.json({
+        message: "Planning completed successfully",
+        prd,
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new AppError(
+          `Failed to finish planning: ${error.message}`,
+          500,
+          "PLANNING_FINISH_FAILED"
+        );
+      }
+      throw error;
+    }
+  });
+
+  /**
+   * POST /api/planning/reset
+   *
+   * Resets the planning service to idle state.
+   * Use this to cancel an in-progress planning session.
+   *
+   * @returns {{ message: string, state: string }}
+   * @throws {503} If orchestrator is not initialized
+   */
+  router.post("/reset", (c) => {
+    const orchestrator = requireOrchestrator();
+
+    orchestrator.resetPlanning();
+
+    return c.json({
+      message: "Planning session reset",
+      state: orchestrator.getPlanningState(),
+    });
+  });
+
+  return router;
+}
