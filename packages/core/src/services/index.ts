@@ -26,6 +26,13 @@ export {
   type OutputCallback,
 } from "./claude-bridge.ts";
 
+// ProgressWatcher - polls progress.json and emits events
+export {
+  ProgressWatcher,
+  type ProgressWatcherOptions,
+  type ProgressWatcherEvents,
+} from "./progress-watcher.ts";
+
 // Custom error classes
 export { FileNotFoundError, ValidationError } from "./errors.ts";
 

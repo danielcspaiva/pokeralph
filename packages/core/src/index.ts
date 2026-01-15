@@ -27,6 +27,10 @@ export {
   type ClaudeMode,
   type ExitCallback,
   type OutputCallback,
+  // ProgressWatcher
+  ProgressWatcher,
+  type ProgressWatcherOptions,
+  type ProgressWatcherEvents,
   // Zod schemas
   ConfigSchema,
   TaskSchema,
