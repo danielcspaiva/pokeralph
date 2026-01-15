@@ -42,6 +42,15 @@ export {
   type StandardLoop,
 } from "./feedback-runner.ts";
 
+// GitService - manages Git operations (commit, status, revert)
+export {
+  GitService,
+  type GitServiceOptions,
+  type FileStatus,
+  type GitStatus,
+  type CommitInfo,
+} from "./git-service.ts";
+
 // Custom error classes
 export { FileNotFoundError, ValidationError } from "./errors.ts";
 
