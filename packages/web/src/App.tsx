@@ -6,17 +6,17 @@
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout.tsx";
-import { Dashboard, Planning } from "@/views/index.ts";
+import { Dashboard, Planning, Battle } from "@/views/index.ts";
 
 /**
- * Placeholder Task Detail view (full implementation in Task 024-25)
+ * Placeholder History view (full implementation in Task 025)
  */
-function TaskDetail() {
+function History() {
   return (
     <div>
-      <h2>Task Detail</h2>
+      <h2>Task History</h2>
       <p style={{ color: "#666", marginTop: "0.5rem" }}>
-        Task detail/battle view coming in Task 024-25.
+        Task history view coming in Task 025.
       </p>
     </div>
   );
@@ -32,7 +32,8 @@ export function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/planning" element={<Planning />} />
-          <Route path="/task/:taskId" element={<TaskDetail />} />
+          <Route path="/task/:taskId" element={<Battle />} />
+          <Route path="/history/:taskId" element={<History />} />
         </Routes>
       </Layout>
     </BrowserRouter>
