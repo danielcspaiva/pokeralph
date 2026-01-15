@@ -51,6 +51,24 @@ export {
   type CommitInfo,
 } from "./git-service.ts";
 
+// BattleOrchestrator - orchestrates the Battle Loop for tasks
+export {
+  BattleOrchestrator,
+  type BattleOrchestratorDependencies,
+  type BattleOrchestratorEvents,
+} from "./battle-orchestrator.ts";
+
+// PlanService - manages planning phase and PRD generation
+export {
+  PlanService,
+  type PlanServiceDependencies,
+  type PlanServiceEvents,
+  type PlanningState,
+  type PRDParseResult,
+  type TasksParseResult,
+} from "./plan-service.ts";
+
+
 // Custom error classes
 export { FileNotFoundError, ValidationError } from "./errors.ts";
 

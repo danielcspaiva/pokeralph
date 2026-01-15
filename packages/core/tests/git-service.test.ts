@@ -1,11 +1,12 @@
 import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import { join } from "node:path";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { GitService } from "../src/services/git-service.ts";
 
-// Create a unique temp directory for each test
+// Create a unique temp directory in system temp folder (outside any git repo)
 const getTempDir = () =>
-  join(import.meta.dir, `.tmp-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  join(tmpdir(), `pokeralph-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 /**
  * Helper to create a GitService instance
@@ -419,6 +420,12 @@ describe("GitService", () => {
   describe("revert", () => {
     test("reverts last commit (soft reset)", async () => {
       await initRepo(tempDir);
+      // Create first commit
+      createFile(tempDir, "initial.txt", "initial");
+      await runGitCommand(tempDir, ["add", "initial.txt"]);
+      await runGitCommand(tempDir, ["commit", "-m", "Initial commit"]);
+
+      // Create second commit to revert
       createFile(tempDir, "file.txt", "content");
       await runGitCommand(tempDir, ["add", "file.txt"]);
       await runGitCommand(tempDir, ["commit", "-m", "Commit to revert"]);
@@ -426,13 +433,13 @@ describe("GitService", () => {
       const service = createService(tempDir);
       await service.revert();
 
-      // After soft reset, changes should be staged
+      // After soft reset, changes from reverted commit should be staged
       const status = await service.status();
       expect(status.staged.length).toBe(1);
 
-      // No commits should exist now (if it was the first commit)
+      // Should now be at the initial commit
       const commit = await service.getLastCommit();
-      expect(commit).toBeNull();
+      expect(commit?.message).toBe("Initial commit");
     });
 
     test("keeps changes in staging area", async () => {
@@ -654,7 +661,12 @@ describe("GitService", () => {
       await runGitCommand(tempDir, ["config", "user.email", "test@pokeralph.dev"]);
       await runGitCommand(tempDir, ["config", "user.name", "PokéRalph Test"]);
 
-      // Create and add file
+      // Create initial commit (required before revert can work)
+      createFile(tempDir, "README.md", "# Project");
+      await service.add(["README.md"]);
+      await service.commit("Initial commit");
+
+      // Create and add feature file
       createFile(tempDir, "feature.ts", "export const feature = true;");
       await service.add(["feature.ts"]);
 
@@ -677,6 +689,7 @@ describe("GitService", () => {
       await service.revert();
       const statusAfterRevert = await service.status();
       expect(statusAfterRevert.staged.length).toBe(1);
+      expect(statusAfterRevert.staged[0]?.path).toBe("feature.ts");
     });
 
     test("handles PokéRalph battle workflow", async () => {
@@ -684,6 +697,8 @@ describe("GitService", () => {
       const service = createService(tempDir);
 
       // Simulate battle iteration: Claude makes changes
+      mkdirSync(join(tempDir, "src"), { recursive: true });
+      mkdirSync(join(tempDir, "tests"), { recursive: true });
       createFile(tempDir, "src/feature.ts", "// Feature implementation");
       createFile(tempDir, "tests/feature.test.ts", "// Feature tests");
 

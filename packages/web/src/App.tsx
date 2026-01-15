@@ -1,21 +1,27 @@
+/**
+ * Main App component for PokéRalph
+ *
+ * Sets up routing and wraps content in the main Layout.
+ */
+
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Layout } from "@/components/Layout.tsx";
+import { Dashboard, Planning, Battle, History } from "@/views/index.ts";
 
-function Dashboard() {
-  return (
-    <div>
-      <h1>PokéRalph</h1>
-      <p>Autonomous development orchestrator</p>
-      <p>v0.1.0 - Wireframe Mode</p>
-    </div>
-  );
-}
-
+/**
+ * Main application component with routing
+ */
 export function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-      </Routes>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/planning" element={<Planning />} />
+          <Route path="/task/:taskId" element={<Battle />} />
+          <Route path="/history/:taskId" element={<History />} />
+        </Routes>
+      </Layout>
     </BrowserRouter>
   );
 }

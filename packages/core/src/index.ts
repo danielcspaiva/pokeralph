@@ -9,6 +9,13 @@
 // Version export for debugging
 export const VERSION = "0.1.0";
 
+// Main Orchestrator - primary entry point
+export {
+  Orchestrator,
+  type AddTaskInput,
+  type UpdateTaskInput,
+} from "./orchestrator.ts";
+
 // Re-export services
 export {
   FileManager,
@@ -43,6 +50,17 @@ export {
   type FileStatus,
   type GitStatus,
   type CommitInfo,
+  // BattleOrchestrator
+  BattleOrchestrator,
+  type BattleOrchestratorDependencies,
+  type BattleOrchestratorEvents,
+  // PlanService
+  PlanService,
+  type PlanServiceDependencies,
+  type PlanServiceEvents,
+  type PlanningState,
+  type PRDParseResult,
+  type TasksParseResult,
   // Zod schemas
   ConfigSchema,
   TaskSchema,

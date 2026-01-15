@@ -5,9 +5,10 @@
   "private": true,
   "workspaces": ["packages/*"],
   "scripts": {
-    "dev": "echo 'Dev script - implemented in Task 027'",
+    "dev": "bun run scripts/dev.ts",
     "build": "bun run --filter '*' build",
     "test": "bun run --filter '*' test",
+    "test:e2e": "bun test tests/e2e/",
     "lint": "bunx @biomejs/biome lint .",
     "format": "bunx @biomejs/biome format --write .",
     "format:check": "bunx @biomejs/biome format .",
