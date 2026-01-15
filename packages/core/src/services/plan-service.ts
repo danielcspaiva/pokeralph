@@ -1,0 +1,693 @@
+/**
+ * PlanService for PokéRalph
+ *
+ * Manages the planning phase and PRD generation.
+ * Handles the interaction with Claude Code in plan mode to refine ideas
+ * and generate structured PRDs with tasks.
+ */
+
+import { EventEmitter } from "node:events";
+import type { ClaudeBridge } from "./claude-bridge.ts";
+import type { PromptBuilder } from "./prompt-builder.ts";
+import { PRD_OUTPUT_SCHEMA } from "./prompt-builder.ts";
+import type { FileManager } from "./file-manager.ts";
+import type { PRD, Task } from "../types/index.ts";
+import { TaskStatus } from "../types/index.ts";
+
+/**
+ * Internal state for the planning phase
+ */
+export type PlanningState = "idle" | "planning" | "waiting_input" | "completed";
+
+/**
+ * Dependencies required by PlanService
+ */
+export interface PlanServiceDependencies {
+  claudeBridge: ClaudeBridge;
+  promptBuilder: PromptBuilder;
+  fileManager: FileManager;
+}
+
+/**
+ * Events emitted by PlanService
+ */
+export interface PlanServiceEvents {
+  /** Emitted when planning starts */
+  planning_started: [{ idea: string }];
+  /** Emitted with Claude output during planning */
+  output: [{ output: string }];
+  /** Emitted when Claude asks a question */
+  question: [{ question: string }];
+  /** Emitted when planning state changes */
+  state_change: [{ from: PlanningState; to: PlanningState }];
+  /** Emitted when planning completes */
+  planning_completed: [{ prd: PRD }];
+  /** Emitted when tasks are generated from PRD */
+  tasks_generated: [{ tasks: Task[] }];
+  /** Emitted on error */
+  error: [{ message: string; code?: string; details?: unknown }];
+}
+
+/**
+ * Result of parsing Claude's PRD output
+ */
+export interface PRDParseResult {
+  success: boolean;
+  prd?: PRD;
+  error?: string;
+  rawOutput: string;
+}
+
+/**
+ * Result of parsing Claude's tasks output
+ */
+export interface TasksParseResult {
+  success: boolean;
+  tasks?: Task[];
+  error?: string;
+  rawOutput: string;
+}
+
+/**
+ * PlanService - manages the planning phase and PRD generation
+ *
+ * @remarks
+ * The planning phase involves:
+ * 1. User describes an idea
+ * 2. Claude asks clarifying questions
+ * 3. User provides answers
+ * 4. Claude generates a PRD
+ * 5. PRD is broken into individual tasks
+ *
+ * @example
+ * ```ts
+ * const planService = new PlanService({
+ *   claudeBridge,
+ *   promptBuilder,
+ *   fileManager,
+ * });
+ *
+ * planService.on("output", ({ output }) => console.log(output));
+ * planService.on("question", ({ question }) => {
+ *   // Get user input and call answerQuestion()
+ * });
+ *
+ * await planService.startPlanning("Build a todo app");
+ * ```
+ */
+export class PlanService extends EventEmitter {
+  private readonly deps: PlanServiceDependencies;
+  private state: PlanningState = "idle";
+  private currentIdea: string | null = null;
+  private conversationBuffer = "";
+  private outputBuffer = "";
+  private pendingQuestion: string | null = null;
+
+  /**
+   * Creates a new PlanService instance
+   *
+   * @param dependencies - All required service dependencies
+   */
+  constructor(dependencies: PlanServiceDependencies) {
+    super();
+    this.deps = dependencies;
+  }
+
+  // ==========================================================================
+  // Public API
+  // ==========================================================================
+
+  /**
+   * Gets the current planning state
+   */
+  getState(): PlanningState {
+    return this.state;
+  }
+
+  /**
+   * Checks if the service is in a planning session
+   */
+  isPlanning(): boolean {
+    return this.state !== "idle" && this.state !== "completed";
+  }
+
+  /**
+   * Starts a new planning session with the given idea
+   *
+   * @param idea - The initial idea to refine
+   * @throws Error if already in a planning session
+   */
+  async startPlanning(idea: string): Promise<void> {
+    if (this.isPlanning()) {
+      throw new Error(
+        "Planning session already in progress. Call finishPlanning() or reset() first."
+      );
+    }
+
+    // Reset state
+    this.currentIdea = idea;
+    this.conversationBuffer = "";
+    this.outputBuffer = "";
+    this.pendingQuestion = null;
+
+    // Transition to planning state
+    this.setState("planning");
+
+    // Emit planning_started event
+    this.emit("planning_started", { idea });
+
+    // Build the planning prompt
+    const prompt = this.deps.promptBuilder.buildPlanningPrompt(idea);
+
+    // Start Claude in plan mode
+    await this.runClaudePlanning(prompt);
+  }
+
+  /**
+   * Sends an answer to Claude's question during planning
+   *
+   * @param answer - The user's answer to the question
+   * @throws Error if not waiting for input
+   */
+  async answerQuestion(answer: string): Promise<void> {
+    if (this.state !== "waiting_input") {
+      throw new Error(`Not waiting for input. Current state: ${this.state}`);
+    }
+
+    // Append to conversation
+    this.conversationBuffer += `\n\nUser: ${answer}\n\nAssistant: `;
+
+    // Transition back to planning
+    this.setState("planning");
+
+    // Continue the conversation with context
+    const continuationPrompt = this.buildContinuationPrompt(answer);
+    await this.runClaudePlanning(continuationPrompt);
+  }
+
+  /**
+   * Finalizes the planning phase and extracts the PRD
+   *
+   * @returns The generated PRD
+   * @throws Error if planning hasn't produced a valid PRD
+   */
+  async finishPlanning(): Promise<PRD> {
+    if (this.state === "idle") {
+      throw new Error("No planning session to finish");
+    }
+
+    // Parse PRD from the output
+    const parseResult = this.parsePRDOutput(this.outputBuffer);
+
+    if (!parseResult.success || !parseResult.prd) {
+      throw new Error(
+        `Failed to parse PRD from planning output: ${parseResult.error}`
+      );
+    }
+
+    const prd = parseResult.prd;
+
+    // Transition to completed
+    this.setState("completed");
+
+    // Emit planning_completed event
+    this.emit("planning_completed", { prd });
+
+    return prd;
+  }
+
+  /**
+   * Breaks a PRD into individual tasks
+   *
+   * @param prd - The PRD to break down (or uses current planning PRD)
+   * @returns Array of generated tasks
+   */
+  async breakIntoTasks(prd: PRD): Promise<Task[]> {
+    // Build the breakdown prompt
+    const prompt = this.deps.promptBuilder.buildBreakdownPrompt(prd);
+
+    // Run Claude to generate tasks
+    const output = await this.runClaudeBreakdown(prompt);
+
+    // Parse tasks from output
+    const parseResult = this.parseTasksOutput(output);
+
+    if (!parseResult.success || !parseResult.tasks) {
+      throw new Error(
+        `Failed to parse tasks from breakdown output: ${parseResult.error}`
+      );
+    }
+
+    // Emit tasks_generated event
+    this.emit("tasks_generated", { tasks: parseResult.tasks });
+
+    return parseResult.tasks;
+  }
+
+  /**
+   * Parses Claude's output to extract a PRD
+   *
+   * @param raw - The raw output from Claude
+   * @returns ParseResult with the PRD or error
+   */
+  parsePRDOutput(raw: string): PRDParseResult {
+    const result: PRDParseResult = {
+      success: false,
+      rawOutput: raw,
+    };
+
+    try {
+      // Extract JSON from the output (may be wrapped in markdown code blocks)
+      const jsonStr = this.extractJSON(raw);
+
+      if (!jsonStr) {
+        result.error = "No JSON found in output";
+        return result;
+      }
+
+      const parsed = JSON.parse(jsonStr);
+
+      // Validate required fields
+      if (!parsed.name || typeof parsed.name !== "string") {
+        result.error = "PRD missing required field: name";
+        return result;
+      }
+
+      if (!parsed.description || typeof parsed.description !== "string") {
+        result.error = "PRD missing required field: description";
+        return result;
+      }
+
+      // Build PRD object
+      const prd: PRD = {
+        name: parsed.name,
+        description: parsed.description,
+        createdAt: parsed.createdAt || new Date().toISOString(),
+        tasks: parsed.tasks || [],
+        metadata: {
+          version: parsed.metadata?.version || "0.1.0",
+          generatedBy: parsed.metadata?.generatedBy || "PokéRalph PlanService",
+          originalIdea: this.currentIdea || parsed.metadata?.originalIdea,
+        },
+      };
+
+      result.success = true;
+      result.prd = prd;
+    } catch (error) {
+      result.error =
+        error instanceof Error ? error.message : "Unknown parse error";
+    }
+
+    return result;
+  }
+
+  /**
+   * Parses Claude's output to extract tasks
+   *
+   * @param raw - The raw output from Claude
+   * @returns ParseResult with tasks or error
+   */
+  parseTasksOutput(raw: string): TasksParseResult {
+    const result: TasksParseResult = {
+      success: false,
+      rawOutput: raw,
+    };
+
+    try {
+      // Extract JSON from the output
+      const jsonStr = this.extractJSON(raw);
+
+      if (!jsonStr) {
+        result.error = "No JSON found in output";
+        return result;
+      }
+
+      const parsed = JSON.parse(jsonStr);
+
+      // Ensure it's an array
+      if (!Array.isArray(parsed)) {
+        result.error = "Tasks output is not an array";
+        return result;
+      }
+
+      // Validate and transform each task
+      const tasks: Task[] = [];
+      const now = new Date().toISOString();
+
+      for (let i = 0; i < parsed.length; i++) {
+        const item = parsed[i];
+
+        // Validate required fields
+        if (!item.id || typeof item.id !== "string") {
+          result.error = `Task at index ${i} missing required field: id`;
+          return result;
+        }
+
+        if (!item.title || typeof item.title !== "string") {
+          result.error = `Task at index ${i} missing required field: title`;
+          return result;
+        }
+
+        if (!item.description || typeof item.description !== "string") {
+          result.error = `Task at index ${i} missing required field: description`;
+          return result;
+        }
+
+        if (typeof item.priority !== "number") {
+          result.error = `Task at index ${i} missing required field: priority`;
+          return result;
+        }
+
+        if (!Array.isArray(item.acceptanceCriteria)) {
+          result.error = `Task at index ${i} missing required field: acceptanceCriteria`;
+          return result;
+        }
+
+        // Build task object
+        const task: Task = {
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          status: TaskStatus.Pending,
+          priority: item.priority,
+          acceptanceCriteria: item.acceptanceCriteria,
+          iterations: [],
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        tasks.push(task);
+      }
+
+      result.success = true;
+      result.tasks = tasks;
+    } catch (error) {
+      result.error =
+        error instanceof Error ? error.message : "Unknown parse error";
+    }
+
+    return result;
+  }
+
+  /**
+   * Saves the PRD to the file system
+   *
+   * @param prd - The PRD to save
+   */
+  async savePRD(prd: PRD): Promise<void> {
+    await this.deps.fileManager.savePRD(prd);
+  }
+
+  /**
+   * Resets the planning service to idle state
+   */
+  reset(): void {
+    // Kill any running Claude process
+    this.deps.claudeBridge.kill();
+
+    // Reset state
+    this.currentIdea = null;
+    this.conversationBuffer = "";
+    this.outputBuffer = "";
+    this.pendingQuestion = null;
+    this.setState("idle");
+  }
+
+  /**
+   * Gets the accumulated conversation buffer
+   */
+  getConversationBuffer(): string {
+    return this.conversationBuffer;
+  }
+
+  /**
+   * Gets the current pending question (if any)
+   */
+  getPendingQuestion(): string | null {
+    return this.pendingQuestion;
+  }
+
+  // ==========================================================================
+  // Private methods
+  // ==========================================================================
+
+  /**
+   * Sets the planning state and emits state_change event
+   */
+  private setState(newState: PlanningState): void {
+    const oldState = this.state;
+    if (oldState !== newState) {
+      this.state = newState;
+      this.emit("state_change", { from: oldState, to: newState });
+    }
+  }
+
+  /**
+   * Runs Claude in plan mode for the initial planning
+   */
+  private async runClaudePlanning(prompt: string): Promise<void> {
+    return new Promise((resolve) => {
+      let currentOutput = "";
+
+      this.deps.claudeBridge.onOutput((data) => {
+        currentOutput += data;
+        this.outputBuffer += data;
+        this.conversationBuffer += data;
+        this.emit("output", { output: data });
+      });
+
+      this.deps.claudeBridge.onError((data) => {
+        currentOutput += data;
+        this.outputBuffer += data;
+        this.conversationBuffer += data;
+        this.emit("output", { output: data });
+      });
+
+      this.deps.claudeBridge.onExit((_code, signal) => {
+        this.deps.claudeBridge.clearCallbacks();
+
+        if (signal === "TIMEOUT") {
+          this.emit("error", {
+            message: "Claude planning session timed out",
+            code: "TIMEOUT",
+          });
+          resolve();
+          return;
+        }
+
+        // Analyze output to detect if Claude is asking a question
+        const question = this.detectQuestion(currentOutput);
+
+        if (question) {
+          this.pendingQuestion = question;
+          this.setState("waiting_input");
+          this.emit("question", { question });
+        } else {
+          // Check if we have a complete PRD in the output
+          const hasValidPRD = this.hasCompletePRD(currentOutput);
+
+          if (hasValidPRD) {
+            // Planning produced a PRD, stay in planning state
+            // User can call finishPlanning() to extract it
+          }
+        }
+
+        resolve();
+      });
+
+      // Spawn Claude in plan mode
+      this.deps.claudeBridge.spawnPlanMode(prompt);
+    });
+  }
+
+  /**
+   * Runs Claude for task breakdown
+   */
+  private async runClaudeBreakdown(prompt: string): Promise<string> {
+    return new Promise((resolve) => {
+      let output = "";
+
+      this.deps.claudeBridge.onOutput((data) => {
+        output += data;
+      });
+
+      this.deps.claudeBridge.onError((data) => {
+        output += data;
+      });
+
+      this.deps.claudeBridge.onExit((_code, signal) => {
+        this.deps.claudeBridge.clearCallbacks();
+
+        if (signal === "TIMEOUT") {
+          this.emit("error", {
+            message: "Claude breakdown session timed out",
+            code: "TIMEOUT",
+          });
+        }
+
+        resolve(output || this.deps.claudeBridge.getCombinedOutput());
+      });
+
+      // Spawn Claude in execution mode for breakdown (doesn't need plan mode)
+      this.deps.claudeBridge.spawnExecutionMode(prompt);
+    });
+  }
+
+  /**
+   * Builds a continuation prompt with conversation context
+   */
+  private buildContinuationPrompt(answer: string): string {
+    return `Continue the planning conversation. The user has answered your question.
+
+Previous conversation context:
+${this.conversationBuffer}
+
+User's answer: ${answer}
+
+Continue helping the user refine their idea. If you have enough information, generate the PRD in JSON format.
+
+PRD JSON Schema:
+\`\`\`json
+${JSON.stringify(PRD_OUTPUT_SCHEMA, null, 2)}
+\`\`\``;
+  }
+
+  /**
+   * Detects if Claude is asking a question in the output
+   */
+  private detectQuestion(output: string): string | null {
+    // Look for common question patterns
+    const questionPatterns = [
+      // Direct questions
+      /(?:^|\n)(?:What|How|Which|Could you|Can you|Would you|Do you|Does|Is|Are|Should|Will)[^?]*\?/gm,
+      // Questions with follow-up
+      /(?:I'd like to know|I need to understand|Could you clarify|Please tell me|Can you specify)[^?]*\?/gm,
+      // Numbered questions
+      /(?:^|\n)\d+\.\s*[^?]*\?/gm,
+    ];
+
+    // Get the last chunk of output (Claude's most recent response)
+    const lines = output.trim().split("\n");
+    const lastChunk = lines.slice(-20).join("\n"); // Last 20 lines
+
+    for (const pattern of questionPatterns) {
+      const matches = lastChunk.match(pattern);
+      if (matches && matches.length > 0) {
+        // Return the last question found
+        const lastMatch = matches[matches.length - 1];
+        if (lastMatch) {
+          return lastMatch.trim();
+        }
+      }
+    }
+
+    // Check if output ends with a question mark
+    const trimmed = output.trim();
+    if (trimmed.endsWith("?")) {
+      // Extract the last sentence/question
+      const sentences = trimmed.split(/[.!]\s+/);
+      const lastSentence = sentences[sentences.length - 1];
+      if (lastSentence?.includes("?")) {
+        return lastSentence.trim();
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Checks if the output contains a complete PRD
+   */
+  private hasCompletePRD(output: string): boolean {
+    const jsonStr = this.extractJSON(output);
+    if (!jsonStr) return false;
+
+    try {
+      const parsed = JSON.parse(jsonStr);
+      return (
+        typeof parsed.name === "string" &&
+        typeof parsed.description === "string"
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Extracts JSON from output that may be wrapped in markdown code blocks
+   */
+  private extractJSON(text: string): string | null {
+    // Try to find JSON in markdown code blocks first
+    const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+    if (codeBlockMatch?.[1]) {
+      const content = codeBlockMatch[1].trim();
+      // Verify it's valid JSON
+      try {
+        JSON.parse(content);
+        return content;
+      } catch {
+        // Not valid JSON, continue to other methods
+      }
+    }
+
+    // Try to find a JSON array directly (check array first, since [{}] would match both)
+    const arrayMatch = text.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      try {
+        JSON.parse(arrayMatch[0]);
+        return arrayMatch[0];
+      } catch {
+        // Not valid JSON
+      }
+    }
+
+    // Try to find a JSON object directly
+    const objectMatch = text.match(/\{[\s\S]*\}/);
+    if (objectMatch) {
+      try {
+        JSON.parse(objectMatch[0]);
+        return objectMatch[0];
+      } catch {
+        // Not valid JSON
+      }
+    }
+
+    return null;
+  }
+
+  // ==========================================================================
+  // Type-safe event emitter methods
+  // ==========================================================================
+
+  override on<K extends keyof PlanServiceEvents>(
+    event: K,
+    listener: (...args: PlanServiceEvents[K]) => void
+  ): this {
+    return super.on(event, listener as (...args: unknown[]) => void);
+  }
+
+  override once<K extends keyof PlanServiceEvents>(
+    event: K,
+    listener: (...args: PlanServiceEvents[K]) => void
+  ): this {
+    return super.once(event, listener as (...args: unknown[]) => void);
+  }
+
+  override off<K extends keyof PlanServiceEvents>(
+    event: K,
+    listener: (...args: PlanServiceEvents[K]) => void
+  ): this {
+    return super.off(event, listener as (...args: unknown[]) => void);
+  }
+
+  override emit<K extends keyof PlanServiceEvents>(
+    event: K,
+    ...args: PlanServiceEvents[K]
+  ): boolean {
+    return super.emit(event, ...args);
+  }
+
+  override removeAllListeners<K extends keyof PlanServiceEvents>(event?: K): this {
+    return super.removeAllListeners(event);
+  }
+}

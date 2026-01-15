@@ -47,6 +47,13 @@ export {
   BattleOrchestrator,
   type BattleOrchestratorDependencies,
   type BattleOrchestratorEvents,
+  // PlanService
+  PlanService,
+  type PlanServiceDependencies,
+  type PlanServiceEvents,
+  type PlanningState,
+  type PRDParseResult,
+  type TasksParseResult,
   // Zod schemas
   ConfigSchema,
   TaskSchema,
