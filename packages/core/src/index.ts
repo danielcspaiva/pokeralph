@@ -37,6 +37,12 @@ export {
   type FeedbackLoopResult,
   STANDARD_LOOPS,
   type StandardLoop,
+  // GitService
+  GitService,
+  type GitServiceOptions,
+  type FileStatus,
+  type GitStatus,
+  type CommitInfo,
   // Zod schemas
   ConfigSchema,
   TaskSchema,
