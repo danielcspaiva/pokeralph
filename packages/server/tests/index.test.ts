@@ -60,19 +60,28 @@ describe("@pokeralph/server", () => {
       expect(data.error).toBe("SERVICE_UNAVAILABLE");
     });
 
-    test("GET /api/prd returns 501 (not yet implemented)", async () => {
+    test("GET /api/prd returns 503 when orchestrator not initialized", async () => {
       const res = await app.fetch(new Request("http://localhost/api/prd"));
-      expect(res.status).toBe(501);
+      expect(res.status).toBe(503);
+
+      const data = await res.json();
+      expect(data.error).toBe("SERVICE_UNAVAILABLE");
     });
 
-    test("GET /api/tasks returns 501 (not yet implemented)", async () => {
-      const res = await app.fetch(new Request("http://localhost/api/tasks"));
-      expect(res.status).toBe(501);
+    test("GET /api/prd/tasks returns 503 when orchestrator not initialized", async () => {
+      const res = await app.fetch(new Request("http://localhost/api/prd/tasks"));
+      expect(res.status).toBe(503);
+
+      const data = await res.json();
+      expect(data.error).toBe("SERVICE_UNAVAILABLE");
     });
 
-    test("GET /api/tasks/:id returns 501 (not yet implemented)", async () => {
-      const res = await app.fetch(new Request("http://localhost/api/tasks/task-001"));
-      expect(res.status).toBe(501);
+    test("GET /api/prd/tasks/:id returns 503 when orchestrator not initialized", async () => {
+      const res = await app.fetch(new Request("http://localhost/api/prd/tasks/task-001"));
+      expect(res.status).toBe(503);
+
+      const data = await res.json();
+      expect(data.error).toBe("SERVICE_UNAVAILABLE");
     });
 
     test("POST /api/planning/start returns 501 (not yet implemented)", async () => {
