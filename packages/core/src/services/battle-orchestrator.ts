@@ -610,9 +610,13 @@ export class BattleOrchestrator extends EventEmitter {
     let commitHash: string | undefined;
     if (config.autoCommit && allPassed && gitStatus.isDirty) {
       try {
-        await this.deps.gitService.add("all");
-        const commitMessage = GitService.formatCommitMessage(taskId, task.title);
-        commitHash = await this.deps.gitService.commit(commitMessage);
+        // Filter out .pokeralph files from commit (they contain app state, not project code)
+        const filesToCommit = filesChanged.filter((f) => !f.startsWith(".pokeralph/"));
+        if (filesToCommit.length > 0) {
+          await this.deps.gitService.add(filesToCommit);
+          const commitMessage = GitService.formatCommitMessage(taskId, task.title);
+          commitHash = await this.deps.gitService.commit(commitMessage);
+        }
       } catch {
         // Commit failed - not fatal
       }

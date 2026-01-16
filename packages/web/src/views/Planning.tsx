@@ -7,12 +7,13 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Loader2, Send, X } from "lucide-react";
+import { Check, Edit2, Loader2, Send, X } from "lucide-react";
 import {
   usePlanningState,
   usePendingQuestion,
   usePlanningOutput,
   useAppStore,
+  usePRD,
 } from "@/stores/app-store";
 import {
   startPlanning,
@@ -538,6 +539,7 @@ export function Planning() {
   const planningState = usePlanningState();
   const pendingQuestion = usePendingQuestion();
   const planningOutput = usePlanningOutput();
+  const existingPRD = usePRD();
 
   const setPlanningState = useAppStore((state) => state.setPlanningState);
   const clearPlanningSession = useAppStore((state) => state.clearPlanningSession);
@@ -584,6 +586,15 @@ export function Planning() {
         const status = await getPlanningStatus();
         if (status.isPlanning) {
           setStage("conversation");
+          // Add a placeholder message so "Finish Planning" button is enabled
+          // (messages from previous session are not persisted in server state)
+          if (messages.length === 0) {
+            setMessages([{
+              type: "claude",
+              content: "(Conversation resumed from previous session)",
+              timestamp: new Date(),
+            }]);
+          }
           if (status.state === "waiting_input" || status.pendingQuestion) {
             setPlanningState("waiting_input");
             // Restore the pending question from server state
@@ -726,8 +737,22 @@ export function Planning() {
 
   // Handle going back from review
   const handleBackFromReview = () => {
-    setStage("conversation");
-    setPlanningState("planning");
+    // If we were editing an existing PRD (no conversation history), go to dashboard
+    if (messages.length === 0) {
+      navigate("/");
+    } else {
+      setStage("conversation");
+      setPlanningState("planning");
+    }
+  };
+
+  // Handle editing existing PRD
+  const handleEditExistingPRD = () => {
+    if (existingPRD) {
+      setGeneratedPRD(existingPRD);
+      setStage("review");
+      setPlanningState("completed");
+    }
   };
 
   return (
@@ -749,7 +774,29 @@ export function Planning() {
       )}
 
       {stage === "input" && (
-        <IdeaInput onSubmit={handleStartPlanning} isLoading={isLoading} />
+        <>
+          <IdeaInput onSubmit={handleStartPlanning} isLoading={isLoading} />
+          {existingPRD && (
+            <div className="mx-auto mt-6 max-w-2xl">
+              <Card>
+                <CardContent className="flex items-center justify-between p-4">
+                  <div>
+                    <p className="font-medium text-[hsl(var(--screen-fg))]">
+                      Existing PRD: {existingPRD.name}
+                    </p>
+                    <p className="text-sm text-[hsl(var(--screen-muted-fg))]">
+                      {existingPRD.tasks.length} task{existingPRD.tasks.length !== 1 ? "s" : ""}
+                    </p>
+                  </div>
+                  <Button onClick={handleEditExistingPRD} variant="outline">
+                    <Edit2 className="mr-2 h-4 w-4" />
+                    Edit PRD
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </>
       )}
 
       {stage === "conversation" && (

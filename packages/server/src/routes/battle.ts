@@ -118,8 +118,11 @@ export function createBattleRoutes(): Hono {
       // No body provided, use default mode from config
     }
 
-    // Start the battle (async - doesn't wait for completion)
-    await orchestrator.startBattle(taskId, mode);
+    // Start the battle asynchronously (fire-and-forget)
+    // Don't await - let it run in the background so the response returns immediately
+    orchestrator.startBattle(taskId, mode).catch((err) => {
+      console.error(`Battle error for task "${taskId}":`, err);
+    });
 
     // Get the actual mode used (from config if not specified)
     const config = await orchestrator.getConfig();

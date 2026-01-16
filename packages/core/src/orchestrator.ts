@@ -213,7 +213,19 @@ export class Orchestrator {
    * @param partial - Partial config to merge with existing config
    */
   async updateConfig(partial: Partial<Config>): Promise<void> {
-    const current = await this.fileManager.loadConfig();
+    // Ensure .pokeralph folder exists before updating
+    if (!(await this.fileManager.exists())) {
+      await this.fileManager.init();
+    }
+
+    let current: Config;
+    try {
+      current = await this.fileManager.loadConfig();
+    } catch {
+      // If config doesn't exist, use defaults
+      current = DEFAULT_CONFIG;
+    }
+
     const updated: Config = {
       ...current,
       ...partial,
