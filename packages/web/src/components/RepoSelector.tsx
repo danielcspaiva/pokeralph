@@ -102,15 +102,15 @@ export function RepoSelector() {
             <Button
               variant="outline"
               size="sm"
-              className="max-w-[200px] gap-2"
+              className="max-w-[200px] gap-2 sm:max-w-[200px]"
             >
               {hasPokeralphFolder ? (
                 <FolderOpen className="h-4 w-4 shrink-0" />
               ) : (
                 <Folder className="h-4 w-4 shrink-0" />
               )}
-              <span className="truncate">{displayPath}</span>
-              <Pencil className="h-3 w-3 shrink-0 opacity-50" />
+              <span className="hidden truncate sm:inline">{displayPath}</span>
+              <Pencil className="hidden h-3 w-3 shrink-0 opacity-50 sm:block" />
             </Button>
           </DialogTrigger>
         </TooltipTrigger>

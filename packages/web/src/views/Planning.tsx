@@ -67,10 +67,10 @@ function IdeaInput({ onSubmit, isLoading }: IdeaInputProps) {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-2xl space-y-4 sm:space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold">Describe Your Idea</h2>
-        <p className="mt-2 text-[hsl(var(--muted-foreground))]">
+        <h2 className="text-lg font-bold sm:text-2xl">Describe Your Idea</h2>
+        <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))] sm:text-base">
           Tell Claude about your project idea. Be as detailed as you like -
           Claude will help refine it into a structured plan with actionable
           tasks.
@@ -430,9 +430,9 @@ interface ProgressStepsProps {
 
 function ProgressSteps({ stage }: ProgressStepsProps) {
   const steps = [
-    { id: "input", label: "Describe Idea" },
-    { id: "conversation", label: "Plan with Claude" },
-    { id: "review", label: "Review & Confirm" },
+    { id: "input", label: "Describe Idea", shortLabel: "Idea" },
+    { id: "conversation", label: "Plan with Claude", shortLabel: "Plan" },
+    { id: "review", label: "Review & Confirm", shortLabel: "Review" },
   ];
 
   const getStepStatus = (stepId: string) => {
@@ -447,14 +447,14 @@ function ProgressSteps({ stage }: ProgressStepsProps) {
   };
 
   return (
-    <div className="mb-8 flex items-center justify-center gap-4">
+    <div className="mb-8 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-center sm:gap-4">
       {steps.map((step, idx) => {
         const status = getStepStatus(step.id);
         return (
           <div key={step.id} className="flex items-center gap-2">
             <div
               className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium",
+                "flex h-6 w-6 items-center justify-center text-xs font-medium sm:h-8 sm:w-8 sm:text-sm",
                 status === "completed" &&
                   "bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]",
                 status === "active" &&
@@ -464,23 +464,24 @@ function ProgressSteps({ stage }: ProgressStepsProps) {
               )}
             >
               {status === "completed" ? (
-                <Check className="h-4 w-4" />
+                <Check className="h-3 w-3 sm:h-4 sm:w-4" />
               ) : (
                 idx + 1
               )}
             </div>
             <span
               className={cn(
-                "text-sm font-medium",
+                "text-xs font-medium sm:text-sm",
                 status === "active"
                   ? "text-[hsl(var(--foreground))]"
                   : "text-[hsl(var(--muted-foreground))]"
               )}
             >
-              {step.label}
+              <span className="hidden sm:inline">{step.label}</span>
+              <span className="sm:hidden">{step.shortLabel}</span>
             </span>
             {idx < steps.length - 1 && (
-              <div className="mx-2 h-px w-12 bg-[hsl(var(--border))]" />
+              <div className="mx-2 hidden h-px w-8 bg-[hsl(var(--border))] sm:block sm:w-12" />
             )}
           </div>
         );

@@ -130,19 +130,19 @@ function TaskListItem({ task }: TaskListItemProps) {
  */
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center py-16">
-      <div className="mb-6 rounded-full bg-[hsl(var(--muted))] p-6">
-        <ClipboardList className="h-12 w-12 text-[hsl(var(--muted-foreground))]" />
+    <div className="flex flex-col items-center justify-center px-4 py-8 sm:py-16">
+      <div className="mb-4 bg-[hsl(var(--muted))] p-4 sm:mb-6 sm:p-6">
+        <ClipboardList className="h-8 w-8 text-[hsl(var(--muted-foreground))] sm:h-12 sm:w-12" />
       </div>
-      <h2 className="mb-2 text-2xl font-semibold">No Project Yet</h2>
-      <p className="mb-6 max-w-md text-center text-[hsl(var(--muted-foreground))]">
+      <h2 className="mb-2 text-center text-lg font-semibold sm:text-2xl">No Project Yet</h2>
+      <p className="mb-4 max-w-md text-center text-sm text-[hsl(var(--muted-foreground))] sm:mb-6 sm:text-base">
         Start by describing your idea and Claude will help you create a plan
         with actionable tasks.
       </p>
       <Button asChild size="lg">
         <Link to="/planning">
-          <Plus className="mr-2 h-5 w-5" />
-          Start Planning
+          <Plus className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
+          <span className="text-xs sm:text-sm">Start Planning</span>
         </Link>
       </Button>
     </div>

@@ -19,11 +19,44 @@ interface LayoutProps {
 }
 
 /**
+ * Check if we're on a mobile/tablet screen
+ */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.innerWidth < 1024;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return isMobile;
+}
+
+/**
  * Main application layout with sidebar navigation and header
  */
 export function Layout({ children }: LayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const isMobile = useIsMobile();
+  // Sidebar closed by default on mobile, open on desktop
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.innerWidth >= 1024;
+  });
   const setPRD = useAppStore((state) => state.setPRD);
+
+  // Close sidebar when switching to mobile view
+  useEffect(() => {
+    if (isMobile && sidebarOpen) {
+      setSidebarOpen(false);
+    }
+  }, [isMobile]);
 
   // Initialize WebSocket connection and load PRD on mount
   useEffect(() => {
