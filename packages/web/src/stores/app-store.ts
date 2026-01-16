@@ -20,15 +20,15 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
-import type {
-  Config,
-  PRD,
-  Task,
-  Progress,
-  Battle,
-  ExecutionMode,
-} from "@pokeralph/core";
-import { TaskStatus } from "@pokeralph/core";
+import {
+  type Config,
+  type PRD,
+  type Task,
+  type Progress,
+  type Battle,
+  type ExecutionMode,
+  TaskStatus,
+} from "@pokeralph/core/types";
 import {
   getWebSocketClient,
   type WebSocketEventPayloads,
@@ -372,8 +372,9 @@ export const useTask = (taskId: string) =>
 
 /**
  * Select tasks by status
+ * @param status - Status string (e.g. "pending", "in_progress")
  */
-export const useTasksByStatus = (status: TaskStatus) =>
+export const useTasksByStatus = (status: string) =>
   useAppStore((state) => state.tasks.filter((t) => t.status === status));
 
 /**
@@ -596,7 +597,7 @@ export function setupWebSocketListeners(): () => void {
       },
     });
     // Also update task status
-    useAppStore.getState().updateTask(payload.taskId, { status: TaskStatus.InProgress });
+    useAppStore.getState().updateTask(payload.taskId, { status: TaskStatus.InProgress  });
   };
 
   // Handler for battle pause
@@ -614,7 +615,7 @@ export function setupWebSocketListeners(): () => void {
           }
         : null,
     }));
-    useAppStore.getState().updateTask(payload.taskId, { status: TaskStatus.Paused });
+    useAppStore.getState().updateTask(payload.taskId, { status: TaskStatus.Paused  });
   };
 
   // Handler for battle resume
@@ -631,7 +632,7 @@ export function setupWebSocketListeners(): () => void {
           }
         : null,
     }));
-    useAppStore.getState().updateTask(payload.taskId, { status: TaskStatus.InProgress });
+    useAppStore.getState().updateTask(payload.taskId, { status: TaskStatus.InProgress  });
   };
 
   // Handler for battle cancel
@@ -640,7 +641,7 @@ export function setupWebSocketListeners(): () => void {
     _timestamp: string
   ) => {
     useAppStore.setState({ currentBattle: null });
-    useAppStore.getState().updateTask(payload.taskId, { status: TaskStatus.Failed });
+    useAppStore.getState().updateTask(payload.taskId, { status: TaskStatus.Failed  });
   };
 
   // Handler for battle complete
@@ -649,7 +650,7 @@ export function setupWebSocketListeners(): () => void {
     _timestamp: string
   ) => {
     useAppStore.setState({ currentBattle: null });
-    useAppStore.getState().updateTask(payload.taskId, { status: TaskStatus.Completed });
+    useAppStore.getState().updateTask(payload.taskId, { status: TaskStatus.Completed  });
     useAppStore.getState().setBattleHistory(payload.taskId, payload.battle);
   };
 
@@ -659,7 +660,7 @@ export function setupWebSocketListeners(): () => void {
     _timestamp: string
   ) => {
     useAppStore.setState({ currentBattle: null });
-    useAppStore.getState().updateTask(payload.taskId, { status: TaskStatus.Failed });
+    useAppStore.getState().updateTask(payload.taskId, { status: TaskStatus.Failed  });
     useAppStore.getState().setBattleHistory(payload.taskId, payload.battle);
   };
 

@@ -21,7 +21,7 @@ import {
   updatePRD,
   getPlanningStatus,
 } from "@/api/client.ts";
-import type { PRD, Task } from "@pokeralph/core";
+import type { PRD, Task } from "@pokeralph/core/types";
 import styles from "./Planning.module.css";
 
 /**

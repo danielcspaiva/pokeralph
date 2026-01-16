@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import type { Config, ExecutionMode } from "@pokeralph/core";
+import type { Config, ExecutionMode } from "@pokeralph/core/types";
 import { useConfig, useAppStore } from "../stores/app-store";
 import { updateConfig as updateConfigApi } from "../api/client";
 import styles from "./ConfigModal.module.css";

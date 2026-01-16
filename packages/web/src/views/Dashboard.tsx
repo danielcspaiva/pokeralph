@@ -16,7 +16,7 @@ import {
   useAppStore,
 } from "@/stores/app-store.ts";
 import { getPRD, startBattle } from "@/api/client.ts";
-import type { Task } from "@pokeralph/core";
+import type { Task } from "@pokeralph/core/types";
 import styles from "./Dashboard.module.css";
 
 /**

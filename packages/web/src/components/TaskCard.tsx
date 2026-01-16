@@ -6,7 +6,7 @@
  */
 
 import { Link } from "react-router-dom";
-import type { Task } from "@pokeralph/core";
+import type { Task } from "@pokeralph/core/types";
 import styles from "./TaskCard.module.css";
 
 interface TaskCardProps {

@@ -14,7 +14,7 @@ const logError = (action: string, error: unknown) => {
   console.error(`%c[PokéRalph][WS] ${action}`, "color: #ef4444; font-weight: bold", error);
 };
 
-import type { Progress, Battle, Task, FeedbackResult } from "@pokeralph/core";
+import type { Progress, Battle, Task, FeedbackResult } from "@pokeralph/core/types";
 
 // ==========================================================================
 // WebSocket Event Types

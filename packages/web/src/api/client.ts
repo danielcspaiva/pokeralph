@@ -23,7 +23,7 @@ import type {
   Progress,
   Battle,
   ExecutionMode,
-} from "@pokeralph/core";
+} from "@pokeralph/core/types";
 
 // ==========================================================================
 // API Response Types
