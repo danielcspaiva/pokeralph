@@ -6,6 +6,11 @@
  */
 
 import { Hono } from "hono";
+
+// Strategic logging helper
+const log = (action: string, data?: unknown) => {
+  console.log(`[PokéRalph][Planning] ${action}`, data ? JSON.stringify(data, null, 2) : "");
+};
 import { z } from "zod";
 import { getOrchestrator } from "../index.ts";
 import { AppError } from "../middleware/error-handler.ts";
@@ -58,6 +63,8 @@ export function createPlanningRoutes(): Hono {
 
     const state = orchestrator.getPlanningState();
     const pendingQuestion = orchestrator.getPlanningQuestion();
+
+    log("GET /status", { state, pendingQuestion, isPlanning: orchestrator.isPlanning() });
 
     return c.json({
       state,
@@ -112,14 +119,19 @@ export function createPlanningRoutes(): Hono {
 
     const { idea } = parseResult.data;
 
+    log("POST /start", { idea: idea.substring(0, 100) + (idea.length > 100 ? "..." : "") });
+
     // Start planning (async - doesn't wait for Claude to finish)
     await orchestrator.startPlanning(idea);
 
-    return c.json({
+    const response = {
       message: "Planning session started",
       idea,
       state: orchestrator.getPlanningState(),
-    });
+    };
+    log("POST /start response", { state: response.state });
+
+    return c.json(response);
   });
 
   /**
@@ -169,13 +181,18 @@ export function createPlanningRoutes(): Hono {
 
     const { answer } = parseResult.data;
 
+    log("POST /answer", { answer: answer.substring(0, 100) + (answer.length > 100 ? "..." : "") });
+
     // Send answer to Claude
     await orchestrator.answerPlanningQuestion(answer);
 
-    return c.json({
+    const response = {
       message: "Answer sent",
       state: orchestrator.getPlanningState(),
-    });
+    };
+    log("POST /answer response", { state: response.state });
+
+    return c.json(response);
   });
 
   /**
@@ -201,18 +218,25 @@ export function createPlanningRoutes(): Hono {
       );
     }
 
+    log("POST /finish - starting");
+
     try {
       // Finish planning and extract PRD
       const prd = await orchestrator.finishPlanning();
 
+      log("POST /finish - PRD extracted", { name: prd.name, taskCount: prd.tasks?.length ?? 0 });
+
       // Save the PRD
       await orchestrator.savePRD(prd);
+
+      log("POST /finish - PRD saved successfully");
 
       return c.json({
         message: "Planning completed successfully",
         prd,
       });
     } catch (error) {
+      log("POST /finish - ERROR", { error: error instanceof Error ? error.message : error });
       if (error instanceof Error) {
         throw new AppError(
           `Failed to finish planning: ${error.message}`,
@@ -236,7 +260,11 @@ export function createPlanningRoutes(): Hono {
   router.post("/reset", (c) => {
     const orchestrator = requireOrchestrator();
 
+    log("POST /reset - resetting planning session");
+
     orchestrator.resetPlanning();
+
+    log("POST /reset - complete", { state: orchestrator.getPlanningState() });
 
     return c.json({
       message: "Planning session reset",

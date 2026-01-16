@@ -161,7 +161,8 @@ export class ClaudeBridge {
 
     // Add mode-specific flags
     if (mode === "plan") {
-      args.push("--plan");
+      // Use --permission-mode plan to allow Claude to explore without making edits
+      args.push("--permission-mode", "plan");
     } else if (mode === "execute" && this.options.acceptEdits) {
       // In execution mode, we accept all edits automatically
       args.push("--dangerously-skip-permissions");

@@ -6,9 +6,10 @@
  */
 
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Sidebar } from "./Sidebar.tsx";
 import { Header } from "./Header.tsx";
+import { connect, setupWebSocketListeners } from "@/stores";
 import styles from "./Layout.module.css";
 
 interface LayoutProps {
@@ -21,6 +22,17 @@ interface LayoutProps {
  */
 export function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // Initialize WebSocket connection on mount
+  useEffect(() => {
+    console.log("[PokéRalph][Layout] Initializing WebSocket connection...");
+    connect();
+    const cleanup = setupWebSocketListeners();
+    return () => {
+      console.log("[PokéRalph][Layout] Cleaning up WebSocket...");
+      cleanup();
+    };
+  }, []);
 
   const toggleSidebar = () => setSidebarOpen((prev) => !prev);
 

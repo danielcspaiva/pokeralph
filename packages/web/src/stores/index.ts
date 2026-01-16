@@ -54,3 +54,6 @@ export {
   // WebSocket integration
   setupWebSocketListeners,
 } from "./app-store.ts";
+
+// Re-export WebSocket connect function for app initialization
+export { connect } from "@/api/websocket.ts";

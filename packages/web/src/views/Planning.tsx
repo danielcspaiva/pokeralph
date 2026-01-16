@@ -430,25 +430,39 @@ export function Planning() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Track which outputs we've already added as messages
+  const processedOutputsRef = useRef<Set<string>>(new Set());
+
   // Sync planning output with messages
   useEffect(() => {
-    if (planningOutput.length > 0) {
-      const lastOutput = planningOutput[planningOutput.length - 1];
-      if (!lastOutput) return;
+    console.log("[PokéRalph][Planning] planningOutput changed", {
+      length: planningOutput.length,
+      outputs: planningOutput.map((o) => o.substring(0, 50) + "..."),
+    });
 
-      // Add new claude messages if not already added
-      setMessages((prev) => {
-        const lastClaudeIdx = prev.findLastIndex((m) => m.type === "claude");
-        const lastClaudeContent = lastClaudeIdx >= 0 ? prev[lastClaudeIdx]?.content : "";
+    if (planningOutput.length === 0) return;
 
-        if (lastOutput !== lastClaudeContent) {
-          return [
-            ...prev,
-            { type: "claude" as const, content: lastOutput, timestamp: new Date() },
-          ];
-        }
-        return prev;
-      });
+    // Process any outputs we haven't seen yet
+    const newMessages: ChatMessage[] = [];
+    for (const output of planningOutput) {
+      if (!output) continue;
+      // Use a hash of the output to track uniqueness
+      const outputKey = output.substring(0, 200);
+      if (!processedOutputsRef.current.has(outputKey)) {
+        processedOutputsRef.current.add(outputKey);
+        newMessages.push({
+          type: "claude" as const,
+          content: output,
+          timestamp: new Date(),
+        });
+        console.log("[PokéRalph][Planning] Adding new Claude message", {
+          preview: output.substring(0, 100) + "...",
+        });
+      }
+    }
+
+    if (newMessages.length > 0) {
+      setMessages((prev) => [...prev, ...newMessages]);
     }
   }, [planningOutput]);
 
@@ -477,18 +491,24 @@ export function Planning() {
     setIsLoading(true);
     setError(null);
 
+    // Add user message BEFORE API call to avoid race condition with WebSocket responses
+    setMessages([{ type: "user", content: idea, timestamp: new Date() }]);
+    processedOutputsRef.current.clear(); // Reset for new session
+
+    // Move to conversation stage immediately for better UX
+    setStage("conversation");
+    setPlanningState("planning");
+
     try {
       await startPlanning(idea);
-
-      // Add user message
-      setMessages([{ type: "user", content: idea, timestamp: new Date() }]);
-
-      // Move to conversation stage
-      setStage("conversation");
-      setPlanningState("planning");
+      // Note: Claude's response will arrive via WebSocket and be handled by useEffect
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to start planning";
       setError(message);
+      // Reset to input stage on error
+      setStage("input");
+      setMessages([]);
+      setPlanningState("idle");
     } finally {
       setIsLoading(false);
     }
@@ -540,6 +560,7 @@ export function Planning() {
     }
     clearPlanningSession();
     setMessages([]);
+    processedOutputsRef.current.clear(); // Reset tracking for new session
     setStage("input");
     setError(null);
   };

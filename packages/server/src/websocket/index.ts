@@ -6,6 +6,11 @@
  */
 
 import type { ServerWebSocket } from "bun";
+
+// Strategic logging helper
+const log = (action: string, data?: unknown) => {
+  console.log(`[PokéRalph][WebSocket] ${action}`, data ? JSON.stringify(data, null, 2) : "");
+};
 import type { Orchestrator } from "@pokeralph/core";
 
 /**
@@ -95,8 +100,8 @@ export class WebSocketManager {
   /** Heartbeat interval in milliseconds (30 seconds) */
   private readonly heartbeatIntervalMs = 30000;
 
-  /** Connection timeout in milliseconds (45 seconds without pong) */
-  private readonly connectionTimeoutMs = 45000;
+  /** Connection timeout in milliseconds (120 seconds without pong - longer for Claude responses) */
+  private readonly connectionTimeoutMs = 120000;
 
   /** Orchestrator reference for event listening */
   private orchestrator: Orchestrator | null = null;
@@ -260,6 +265,12 @@ export class WebSocketManager {
   broadcast<T>(type: WebSocketEventType, payload: T): void {
     const message = createWebSocketMessage(type, payload);
     const messageStr = JSON.stringify(message);
+
+    // Log broadcasts (summarize large payloads)
+    const logPayload = type === "iteration_output" || type === "planning_output"
+      ? { output: `${String((payload as { output?: string }).output ?? "").substring(0, 100)}...` }
+      : payload;
+    log(`Broadcasting: ${type}`, { clientCount: this.clients.size, payload: logPayload });
 
     for (const client of this.clients) {
       try {

@@ -5,6 +5,15 @@
  * Features automatic reconnection, heartbeat, and typed event handling.
  */
 
+// Strategic logging helper for browser console
+const log = (action: string, data?: unknown) => {
+  console.log(`%c[PokéRalph][WS] ${action}`, "color: #10b981; font-weight: bold", data ?? "");
+};
+
+const logError = (action: string, error: unknown) => {
+  console.error(`%c[PokéRalph][WS] ${action}`, "color: #ef4444; font-weight: bold", error);
+};
+
 import type { Progress, Battle, Task, FeedbackResult } from "@pokeralph/core";
 
 // ==========================================================================
@@ -310,10 +319,12 @@ export class WebSocketClient {
       return; // Already connected
     }
 
+    log("Connecting", { url: this.options.url });
     this.connectionState = "connecting";
     this.socket = new WebSocket(this.options.url);
 
     this.socket.onopen = () => {
+      log("Connected successfully");
       this.connectionState = "connected";
       this.reconnectAttempts = 0;
       this.startHeartbeat();
@@ -324,11 +335,12 @@ export class WebSocketClient {
     };
 
     this.socket.onclose = (event) => {
+      log("Connection closed", { code: event.code, reason: event.reason });
       this.handleClose(event);
     };
 
     this.socket.onerror = () => {
-      // Error events don't have useful info, wait for close
+      logError("Connection error", "See network tab for details");
     };
   }
 
@@ -386,10 +398,22 @@ export class WebSocketClient {
     try {
       const message: WebSocketMessage = JSON.parse(data);
 
+      // Log incoming messages (summarize large payloads)
+      const shouldSummarize = message.type === "planning_output" || message.type === "iteration_output";
+      const logPayload = shouldSummarize
+        ? { output: `${String((message.payload as { output?: string }).output ?? "").substring(0, 80)}...` }
+        : message.payload;
+
+      // Skip logging pong to reduce noise
+      if (message.type !== "pong") {
+        log(`Received: ${message.type}`, logPayload);
+      }
+
       // Handle connected event specially to store connection ID
       if (message.type === "connected") {
         const payload = message.payload as ConnectedPayload;
         this.connectionId = payload.connectionId;
+        log("Assigned connection ID", { connectionId: this.connectionId });
       }
 
       // Emit to all listeners for this event type
@@ -403,15 +427,12 @@ export class WebSocketClient {
               message.timestamp
             );
           } catch (error) {
-            console.error(
-              `[WebSocket] Error in listener for ${message.type}:`,
-              error
-            );
+            logError(`Error in listener for ${message.type}`, error);
           }
         }
       }
     } catch (error) {
-      console.error("[WebSocket] Failed to parse message:", error);
+      logError("Failed to parse message", error);
     }
   }
 

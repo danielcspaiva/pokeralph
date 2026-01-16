@@ -7,6 +7,11 @@
  */
 
 import { EventEmitter } from "node:events";
+
+// Strategic logging helper
+const log = (action: string, data?: unknown) => {
+  console.log(`[PokéRalph][PlanService] ${action}`, data ? JSON.stringify(data, null, 2) : "");
+};
 import type { ClaudeBridge } from "./claude-bridge.ts";
 import type { PromptBuilder } from "./prompt-builder.ts";
 import { PRD_OUTPUT_SCHEMA } from "./prompt-builder.ts";
@@ -138,6 +143,8 @@ export class PlanService extends EventEmitter {
    * @throws Error if already in a planning session
    */
   async startPlanning(idea: string): Promise<void> {
+    log("startPlanning called", { idea: idea.substring(0, 100) + (idea.length > 100 ? "..." : "") });
+
     if (this.isPlanning()) {
       throw new Error(
         "Planning session already in progress. Call finishPlanning() or reset() first."
@@ -158,9 +165,11 @@ export class PlanService extends EventEmitter {
 
     // Build the planning prompt
     const prompt = this.deps.promptBuilder.buildPlanningPrompt(idea);
+    log("Built planning prompt", { promptLength: prompt.length });
 
     // Start Claude in plan mode
     await this.runClaudePlanning(prompt);
+    log("Claude planning session completed");
   }
 
   /**
@@ -437,6 +446,7 @@ export class PlanService extends EventEmitter {
   private setState(newState: PlanningState): void {
     const oldState = this.state;
     if (oldState !== newState) {
+      log(`State transition: ${oldState} → ${newState}`);
       this.state = newState;
       this.emit("state_change", { from: oldState, to: newState });
     }
@@ -556,14 +566,18 @@ ${JSON.stringify(PRD_OUTPUT_SCHEMA, null, 2)}
    * Detects if Claude is asking a question in the output
    */
   private detectQuestion(output: string): string | null {
+    log("detectQuestion - analyzing output", { outputLength: output.length });
+
     // Look for common question patterns
     const questionPatterns = [
-      // Direct questions
-      /(?:^|\n)(?:What|How|Which|Could you|Can you|Would you|Do you|Does|Is|Are|Should|Will)[^?]*\?/gm,
+      // Direct questions (with optional markdown bold around question word)
+      /(?:^|\n)\**(?:What|How|Which|Could you|Can you|Would you|Do you|Does|Is|Are|Should|Will)\**[^?]*\?/gm,
       // Questions with follow-up
       /(?:I'd like to know|I need to understand|Could you clarify|Please tell me|Can you specify)[^?]*\?/gm,
-      // Numbered questions
-      /(?:^|\n)\d+\.\s*[^?]*\?/gm,
+      // Numbered questions with optional markdown bold (e.g., **1.** or 1.)
+      /(?:^|\n)\**\d+\.\**\s*[^?]*\?/gm,
+      // Any line containing a question mark after a dash or colon (common Claude formatting)
+      /(?:^|\n)[^?\n]*[-:]\s*[^?\n]*\?/gm,
     ];
 
     // Get the last chunk of output (Claude's most recent response)
@@ -576,6 +590,7 @@ ${JSON.stringify(PRD_OUTPUT_SCHEMA, null, 2)}
         // Return the last question found
         const lastMatch = matches[matches.length - 1];
         if (lastMatch) {
+          log("detectQuestion - found question", { question: lastMatch.trim().substring(0, 100) });
           return lastMatch.trim();
         }
       }
@@ -588,10 +603,12 @@ ${JSON.stringify(PRD_OUTPUT_SCHEMA, null, 2)}
       const sentences = trimmed.split(/[.!]\s+/);
       const lastSentence = sentences[sentences.length - 1];
       if (lastSentence?.includes("?")) {
+        log("detectQuestion - found trailing question", { question: lastSentence.trim().substring(0, 100) });
         return lastSentence.trim();
       }
     }
 
+    log("detectQuestion - no question detected");
     return null;
   }
 

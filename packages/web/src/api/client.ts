@@ -5,6 +5,15 @@
  * Uses the Vite proxy configuration to route /api requests to localhost:3456.
  */
 
+// Strategic logging helper for browser console
+const log = (action: string, data?: unknown) => {
+  console.log(`%c[PokéRalph][API] ${action}`, "color: #3b82f6; font-weight: bold", data ?? "");
+};
+
+const logError = (action: string, error: unknown) => {
+  console.error(`%c[PokéRalph][API] ${action}`, "color: #ef4444; font-weight: bold", error);
+};
+
 // Re-use types from core where possible
 import type {
   Config,
@@ -190,17 +199,27 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${BASE_URL}${path}`;
+  const method = options.method || "GET";
   const headers: HeadersInit = {
     "Content-Type": "application/json",
     ...options.headers,
   };
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  log(`${method} ${path}`, options.body ? JSON.parse(options.body as string) : undefined);
 
-  return handleResponse<T>(response);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    const result = await handleResponse<T>(response);
+    log(`${method} ${path} response`, result);
+    return result;
+  } catch (error) {
+    logError(`${method} ${path} failed`, error);
+    throw error;
+  }
 }
 
 // ==========================================================================
