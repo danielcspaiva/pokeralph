@@ -149,8 +149,12 @@ export function createPlanningRoutes(): Hono {
     const orchestrator = requireOrchestrator();
 
     // Check if we're waiting for input
+    // Accept either explicit waiting_input state OR presence of a pending question
+    // This handles the race condition where pendingQuestion is set but state hasn't fully transitioned
     const state = orchestrator.getPlanningState();
-    if (state !== "waiting_input") {
+    const pendingQuestion = orchestrator.getPlanningQuestion();
+
+    if (state !== "waiting_input" && !pendingQuestion) {
       throw new AppError(
         `Not waiting for input. Current state: ${state}`,
         409,
@@ -245,6 +249,59 @@ export function createPlanningRoutes(): Hono {
         );
       }
       throw error;
+    }
+  });
+
+  /**
+   * POST /api/planning/breakdown
+   *
+   * Breaks down the current PRD into more detailed tasks.
+   * Replaces existing tasks with the refined breakdown.
+   *
+   * @returns {{ message: string, tasks: Task[], prd: PRD }}
+   * @throws {409} If no PRD exists
+   * @throws {500} If breakdown fails
+   * @throws {503} If orchestrator is not initialized
+   */
+  router.post("/breakdown", async (c) => {
+    const orchestrator = requireOrchestrator();
+
+    // Get current PRD
+    const prd = await orchestrator.getPRD();
+    if (!prd) {
+      throw new AppError("No PRD exists. Complete planning first.", 409, "NO_PRD");
+    }
+
+    log("POST /breakdown - starting task breakdown");
+
+    try {
+      // Generate detailed tasks
+      const tasks = await orchestrator.breakIntoTasks(prd);
+
+      // Update PRD with new tasks
+      const updatedPRD = {
+        ...prd,
+        tasks,
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Save updated PRD
+      await orchestrator.savePRD(updatedPRD);
+
+      log("POST /breakdown - tasks generated", { count: tasks.length });
+
+      return c.json({
+        message: "Tasks refined successfully",
+        tasks,
+        prd: updatedPRD,
+      });
+    } catch (error) {
+      log("POST /breakdown - ERROR", { error: error instanceof Error ? error.message : error });
+      throw new AppError(
+        `Failed to break down PRD: ${error instanceof Error ? error.message : error}`,
+        500,
+        "BREAKDOWN_FAILED"
+      );
     }
   });
 

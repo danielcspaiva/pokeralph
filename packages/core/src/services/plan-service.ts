@@ -179,9 +179,14 @@ export class PlanService extends EventEmitter {
    * @throws Error if not waiting for input
    */
   async answerQuestion(answer: string): Promise<void> {
-    if (this.state !== "waiting_input") {
+    // Accept either explicit waiting_input state OR presence of a pending question
+    // This handles the race condition where pendingQuestion is set but state hasn't fully transitioned
+    if (this.state !== "waiting_input" && !this.pendingQuestion) {
       throw new Error(`Not waiting for input. Current state: ${this.state}`);
     }
+
+    // Clear the pending question
+    this.pendingQuestion = null;
 
     // Append to conversation
     this.conversationBuffer += `\n\nUser: ${answer}\n\nAssistant: `;
@@ -287,12 +292,54 @@ export class PlanService extends EventEmitter {
         return result;
       }
 
-      // Build PRD object
+      // Validate tasks array exists and has at least one item
+      if (!Array.isArray(parsed.tasks) || parsed.tasks.length === 0) {
+        result.error = "PRD must contain at least one task";
+        return result;
+      }
+
+      // Validate each task has required fields and transform to Task objects
+      const now = new Date().toISOString();
+      const tasks: Task[] = [];
+
+      for (let i = 0; i < parsed.tasks.length; i++) {
+        const t = parsed.tasks[i];
+
+        if (!t.id || typeof t.id !== "string") {
+          result.error = `Task ${i + 1} missing required field: id`;
+          return result;
+        }
+
+        if (!t.title || typeof t.title !== "string") {
+          result.error = `Task ${i + 1} missing required field: title`;
+          return result;
+        }
+
+        if (!t.description || typeof t.description !== "string") {
+          result.error = `Task ${i + 1} missing required field: description`;
+          return result;
+        }
+
+        // Transform to proper Task object with status
+        tasks.push({
+          id: t.id,
+          title: t.title,
+          description: t.description,
+          status: TaskStatus.Pending,
+          priority: typeof t.priority === "number" ? t.priority : 99,
+          acceptanceCriteria: Array.isArray(t.acceptanceCriteria) ? t.acceptanceCriteria : [],
+          iterations: [],
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+
+      // Build PRD object with validated tasks
       const prd: PRD = {
         name: parsed.name,
         description: parsed.description,
-        createdAt: parsed.createdAt || new Date().toISOString(),
-        tasks: parsed.tasks || [],
+        createdAt: parsed.createdAt || now,
+        tasks,
         metadata: {
           version: parsed.metadata?.version || "0.1.0",
           generatedBy: parsed.metadata?.generatedBy || "PokéRalph PlanService",
@@ -608,6 +655,26 @@ ${JSON.stringify(PRD_OUTPUT_SCHEMA, null, 2)}
       }
     }
 
+    // Check for implicit question patterns (Claude asking for info without explicit ?)
+    // These patterns indicate Claude is waiting for user input
+    const implicitQuestionPatterns = [
+      /(?:Here's what I need to understand|I need to understand|I'd like to understand|Let me understand)/i,
+      /(?:Once you answer|After you answer|When you answer|Please answer|Please provide|Please tell me|Please clarify)/i,
+      /(?:I have (?:some|a few|several) questions|Here are (?:my|some|a few) questions)/i,
+      /(?:Could you (?:provide|share|tell|clarify|explain)|Would you (?:like|prefer))/i,
+      /(?:What (?:would you|do you) prefer|Which (?:would you|do you) prefer)/i,
+    ];
+
+    for (const pattern of implicitQuestionPatterns) {
+      if (pattern.test(lastChunk)) {
+        // Extract a meaningful summary of what Claude is asking
+        const summaryMatch = lastChunk.match(/(?:Here's what I need to understand|I need to understand|questions)[:\s]*(.*?)(?:\n\n|$)/is);
+        const question = summaryMatch?.[1]?.trim() || "Claude is asking clarifying questions. Please review the conversation and provide your answers.";
+        log("detectQuestion - found implicit question pattern", { question: question.substring(0, 100) });
+        return question;
+      }
+    }
+
     log("detectQuestion - no question detected");
     return null;
   }
@@ -647,23 +714,24 @@ ${JSON.stringify(PRD_OUTPUT_SCHEMA, null, 2)}
       }
     }
 
-    // Try to find a JSON array directly (check array first, since [{}] would match both)
-    const arrayMatch = text.match(/\[[\s\S]*\]/);
-    if (arrayMatch) {
-      try {
-        JSON.parse(arrayMatch[0]);
-        return arrayMatch[0];
-      } catch {
-        // Not valid JSON
-      }
-    }
-
-    // Try to find a JSON object directly
+    // Try to find a JSON object directly first (PRDs are objects)
+    // This ensures we get the full PRD even if it contains arrays
     const objectMatch = text.match(/\{[\s\S]*\}/);
     if (objectMatch) {
       try {
         JSON.parse(objectMatch[0]);
         return objectMatch[0];
+      } catch {
+        // Not valid JSON
+      }
+    }
+
+    // Try to find a JSON array directly (for task lists)
+    const arrayMatch = text.match(/\[[\s\S]*\]/);
+    if (arrayMatch) {
+      try {
+        JSON.parse(arrayMatch[0]);
+        return arrayMatch[0];
       } catch {
         // Not valid JSON
       }

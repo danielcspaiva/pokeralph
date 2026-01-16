@@ -550,6 +550,17 @@ export function setupWebSocketListeners(): () => void {
     });
   };
 
+  // Handler for disconnected event
+  const handleDisconnected = (
+    _payload: WebSocketEventPayloads["disconnected"],
+    _timestamp: string
+  ) => {
+    useAppStore.setState({
+      isConnected: false,
+      connectionId: null,
+    });
+  };
+
   // Handler for planning output
   const handlePlanningOutput = (
     payload: WebSocketEventPayloads["planning_output"],
@@ -761,6 +772,7 @@ export function setupWebSocketListeners(): () => void {
 
   // Register all listeners
   wsClient.on("connected", handleConnected);
+  wsClient.on("disconnected", handleDisconnected);
   wsClient.on("planning_output", handlePlanningOutput);
   wsClient.on("planning_question", handlePlanningQuestion);
   wsClient.on("planning_completed", handlePlanningCompleted);
@@ -780,6 +792,7 @@ export function setupWebSocketListeners(): () => void {
   // Return cleanup function
   return () => {
     wsClient.off("connected", handleConnected);
+    wsClient.off("disconnected", handleDisconnected);
     wsClient.off("planning_output", handlePlanningOutput);
     wsClient.off("planning_question", handlePlanningQuestion);
     wsClient.off("planning_completed", handlePlanningCompleted);

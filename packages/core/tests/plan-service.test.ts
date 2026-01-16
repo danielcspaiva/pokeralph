@@ -140,11 +140,14 @@ describe("PlanService", () => {
     });
 
     test("returns false when completed", async () => {
-      // Simulate a completed PRD output
+      // Simulate a completed PRD output with required tasks
       const prdJson = JSON.stringify({
         name: "Test Project",
         description: "A test project",
         createdAt: new Date().toISOString(),
+        tasks: [
+          { id: "001-setup", title: "Setup", description: "Initial setup", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       });
 
       process.env.MOCK_CLAUDE_MODE = "output";
@@ -191,6 +194,9 @@ describe("PlanService", () => {
       const prdJson = JSON.stringify({
         name: "Test Project",
         description: "A test project",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       });
 
       process.env.MOCK_CLAUDE_MODE = "output";
@@ -212,6 +218,9 @@ describe("PlanService", () => {
       const prdJson = JSON.stringify({
         name: "Test Project",
         description: "A test project",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       });
 
       process.env.MOCK_CLAUDE_MODE = "output";
@@ -233,6 +242,9 @@ describe("PlanService", () => {
       const prdJson = JSON.stringify({
         name: "Test Project",
         description: "A test project",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       });
 
       process.env.MOCK_CLAUDE_MODE = "output";
@@ -269,6 +281,9 @@ describe("PlanService", () => {
         const prdJson = JSON.stringify({
           name: "Test Project",
           description: "A test project",
+          tasks: [
+            { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+          ],
         });
         process.env.MOCK_CLAUDE_OUTPUT = `Got it! Here's your PRD:\n\`\`\`json\n${prdJson}\n\`\`\``;
 
@@ -296,6 +311,9 @@ describe("PlanService", () => {
         name: "My App",
         description: "A great application",
         createdAt: new Date().toISOString(),
+        tasks: [
+          { id: "001-feature", title: "Main Feature", description: "Implement feature", priority: 1, acceptanceCriteria: ["Works"] },
+        ],
       });
 
       process.env.MOCK_CLAUDE_MODE = "output";
@@ -320,6 +338,9 @@ describe("PlanService", () => {
       const prdJson = JSON.stringify({
         name: "Test Project",
         description: "A test project",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       });
 
       process.env.MOCK_CLAUDE_MODE = "output";
@@ -336,6 +357,9 @@ describe("PlanService", () => {
       const prdJson = JSON.stringify({
         name: "Test Project",
         description: "A test project",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       });
 
       process.env.MOCK_CLAUDE_MODE = "output";
@@ -465,6 +489,9 @@ describe("PlanService", () => {
         name: "My Project",
         description: "Project description",
         createdAt: "2025-01-15T10:00:00.000Z",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       };
 
       const raw = `Here is your PRD:\n\`\`\`json\n${JSON.stringify(prdJson, null, 2)}\n\`\`\``;
@@ -480,6 +507,9 @@ describe("PlanService", () => {
       const prdJson = {
         name: "Raw JSON Project",
         description: "Parsed from raw JSON",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       };
 
       const raw = `Some text before ${JSON.stringify(prdJson)} some text after`;
@@ -519,6 +549,9 @@ describe("PlanService", () => {
       const prdJson = {
         name: "Project",
         description: "Description",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       };
 
       const result = planService.parsePRDOutput(JSON.stringify(prdJson));
@@ -532,6 +565,9 @@ describe("PlanService", () => {
       const prdJson = JSON.stringify({
         name: "Test",
         description: "Description",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       });
 
       process.env.MOCK_CLAUDE_MODE = "output";
@@ -542,6 +578,31 @@ describe("PlanService", () => {
       const result = planService.parsePRDOutput(prdJson);
 
       expect(result.prd?.metadata?.originalIdea).toBe("My original idea");
+    });
+
+    test("returns error for missing tasks", () => {
+      const prdJson = {
+        name: "Project",
+        description: "Description",
+      };
+
+      const result = planService.parsePRDOutput(JSON.stringify(prdJson));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("at least one task");
+    });
+
+    test("returns error for empty tasks array", () => {
+      const prdJson = {
+        name: "Project",
+        description: "Description",
+        tasks: [],
+      };
+
+      const result = planService.parsePRDOutput(JSON.stringify(prdJson));
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("at least one task");
     });
   });
 
@@ -585,7 +646,7 @@ describe("PlanService", () => {
     test("returns error for missing task id", () => {
       const tasksJson = [{ title: "No ID", description: "Missing ID", priority: 1, acceptanceCriteria: [] }];
 
-      const result = planService.parseTasksOutput(JSON.stringify(tasksJson));
+      const result = planService.parseTasksOutput(`\`\`\`json\n${JSON.stringify(tasksJson)}\n\`\`\``);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("missing required field: id");
@@ -594,7 +655,7 @@ describe("PlanService", () => {
     test("returns error for missing task title", () => {
       const tasksJson = [{ id: "001", description: "Missing title", priority: 1, acceptanceCriteria: [] }];
 
-      const result = planService.parseTasksOutput(JSON.stringify(tasksJson));
+      const result = planService.parseTasksOutput(`\`\`\`json\n${JSON.stringify(tasksJson)}\n\`\`\``);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("missing required field: title");
@@ -603,7 +664,7 @@ describe("PlanService", () => {
     test("returns error for missing task description", () => {
       const tasksJson = [{ id: "001", title: "Has title", priority: 1, acceptanceCriteria: [] }];
 
-      const result = planService.parseTasksOutput(JSON.stringify(tasksJson));
+      const result = planService.parseTasksOutput(`\`\`\`json\n${JSON.stringify(tasksJson)}\n\`\`\``);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("missing required field: description");
@@ -612,7 +673,7 @@ describe("PlanService", () => {
     test("returns error for missing priority", () => {
       const tasksJson = [{ id: "001", title: "Title", description: "Desc", acceptanceCriteria: [] }];
 
-      const result = planService.parseTasksOutput(JSON.stringify(tasksJson));
+      const result = planService.parseTasksOutput(`\`\`\`json\n${JSON.stringify(tasksJson)}\n\`\`\``);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("missing required field: priority");
@@ -621,7 +682,7 @@ describe("PlanService", () => {
     test("returns error for missing acceptance criteria", () => {
       const tasksJson = [{ id: "001", title: "Title", description: "Desc", priority: 1 }];
 
-      const result = planService.parseTasksOutput(JSON.stringify(tasksJson));
+      const result = planService.parseTasksOutput(`\`\`\`json\n${JSON.stringify(tasksJson)}\n\`\`\``);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain("missing required field: acceptanceCriteria");
@@ -638,7 +699,7 @@ describe("PlanService", () => {
         },
       ];
 
-      const result = planService.parseTasksOutput(JSON.stringify(tasksJson));
+      const result = planService.parseTasksOutput(`\`\`\`json\n${JSON.stringify(tasksJson)}\n\`\`\``);
 
       expect(result.tasks).toBeDefined();
       const task = result.tasks![0]!;
@@ -676,6 +737,9 @@ describe("PlanService", () => {
       const prdJson = JSON.stringify({
         name: "Test",
         description: "Description",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       });
 
       process.env.MOCK_CLAUDE_MODE = "output";
@@ -693,6 +757,9 @@ describe("PlanService", () => {
       const prdJson = JSON.stringify({
         name: "Test",
         description: "Description",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       });
 
       process.env.MOCK_CLAUDE_MODE = "output";
@@ -709,6 +776,9 @@ describe("PlanService", () => {
       const prdJson = JSON.stringify({
         name: "First",
         description: "First project",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       });
 
       process.env.MOCK_CLAUDE_MODE = "output";
@@ -722,6 +792,9 @@ describe("PlanService", () => {
       const prdJson2 = JSON.stringify({
         name: "Second",
         description: "Second project",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       });
 
       process.env.MOCK_CLAUDE_OUTPUT = prdJson2;
@@ -739,8 +812,15 @@ describe("PlanService", () => {
 
   describe("getConversationBuffer", () => {
     test("returns accumulated conversation", async () => {
+      const prdJson = JSON.stringify({
+        name: "Test",
+        description: "Desc",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
+      });
       process.env.MOCK_CLAUDE_MODE = "output";
-      process.env.MOCK_CLAUDE_OUTPUT = "Here is some output\n```json\n{\"name\":\"Test\",\"description\":\"Desc\"}\n```";
+      process.env.MOCK_CLAUDE_OUTPUT = `Here is some output\n\`\`\`json\n${prdJson}\n\`\`\``;
 
       await planService.startPlanning("Build an app");
 
@@ -821,6 +901,9 @@ describe("PlanService", () => {
       const prdJson = JSON.stringify({
         name: "Test",
         description: "Description",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       });
 
       process.env.MOCK_CLAUDE_MODE = "output";
@@ -846,6 +929,9 @@ describe("PlanService", () => {
       const prdJson = JSON.stringify({
         name: "Test",
         description: "Description",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       });
 
       process.env.MOCK_CLAUDE_MODE = "output";
@@ -871,6 +957,9 @@ describe("PlanService", () => {
       const prdJson = JSON.stringify({
         name: "Test",
         description: "Description",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
       });
 
       process.env.MOCK_CLAUDE_MODE = "output";

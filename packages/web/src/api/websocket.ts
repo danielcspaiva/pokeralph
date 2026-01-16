@@ -26,6 +26,7 @@ import type { Progress, Battle, Task, FeedbackResult } from "@pokeralph/core/typ
 export type WebSocketEventType =
   // Connection events
   | "connected"
+  | "disconnected"
   | "pong"
   // Planning events
   | "planning_output"
@@ -183,6 +184,13 @@ export interface RepoChangedPayload {
   workingDir: string;
 }
 
+/** Disconnected payload (client-side event) */
+export interface DisconnectedPayload {
+  code: number;
+  reason: string;
+  willReconnect: boolean;
+}
+
 // ==========================================================================
 // Event Listener Types
 // ==========================================================================
@@ -190,6 +198,7 @@ export interface RepoChangedPayload {
 /** Map of event types to their payload types */
 export interface WebSocketEventPayloads {
   connected: ConnectedPayload;
+  disconnected: DisconnectedPayload;
   pong: { timestamp?: string };
   planning_output: PlanningOutputPayload;
   planning_question: PlanningQuestionPayload;
@@ -451,8 +460,31 @@ export class WebSocketClient {
     this.cleanup();
     this.connectionId = null;
 
+    // Determine if we will reconnect
+    const willReconnect = this.options.autoReconnect && event.code !== 1000;
+
+    // Emit disconnected event so listeners can update UI
+    const disconnectedPayload: DisconnectedPayload = {
+      code: event.code,
+      reason: event.reason,
+      willReconnect,
+    };
+    const eventListeners = this.listeners.get("disconnected");
+    if (eventListeners) {
+      for (const listener of eventListeners) {
+        try {
+          listener(
+            disconnectedPayload as WebSocketEventPayloads[WebSocketEventType],
+            new Date().toISOString()
+          );
+        } catch (error) {
+          logError("Error in disconnected listener", error);
+        }
+      }
+    }
+
     // Only reconnect if it wasn't a clean close
-    if (this.options.autoReconnect && event.code !== 1000) {
+    if (willReconnect) {
       this.scheduleReconnect();
     } else {
       this.connectionState = "disconnected";

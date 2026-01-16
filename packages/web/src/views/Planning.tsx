@@ -21,6 +21,7 @@ import {
   resetPlanning,
   updatePRD,
   getPlanningStatus,
+  breakdownTasks,
 } from "@/api/client";
 import type { PRD, Task } from "@pokeralph/core/types";
 import { Button } from "@/components/ui/button";
@@ -157,7 +158,7 @@ function Conversation({
           </Button>
           <Button
             onClick={onFinish}
-            disabled={isProcessing || isWaitingInput}
+            disabled={isProcessing || messages.length === 0}
           >
             {isProcessing ? (
               <>
@@ -251,10 +252,25 @@ interface ReviewProps {
   onConfirm: () => void;
   onBack: () => void;
   isLoading: boolean;
+  onError: (error: string) => void;
 }
 
-function Review({ prd, onEdit, onConfirm, onBack, isLoading }: ReviewProps) {
+function Review({ prd, onEdit, onConfirm, onBack, isLoading, onError }: ReviewProps) {
   const [editedPRD, setEditedPRD] = useState(prd);
+  const [isRefining, setIsRefining] = useState(false);
+
+  const handleRefineTasks = async () => {
+    setIsRefining(true);
+    try {
+      const result = await breakdownTasks();
+      setEditedPRD(result.prd);
+      onEdit(result.prd);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Failed to refine tasks");
+    } finally {
+      setIsRefining(false);
+    }
+  };
 
   const handleNameChange = (name: string) => {
     const updated = { ...editedPRD, name };
@@ -332,6 +348,26 @@ function Review({ prd, onEdit, onConfirm, onBack, isLoading }: ReviewProps) {
         </TabsContent>
 
         <TabsContent value="tasks" className="mt-4">
+          <div className="mb-4 flex items-center justify-between">
+            <span className="text-sm text-[hsl(var(--muted-foreground))]">
+              {editedPRD.tasks.length} task{editedPRD.tasks.length !== 1 ? "s" : ""} generated
+            </span>
+            <Button
+              variant="outline"
+              onClick={handleRefineTasks}
+              disabled={isRefining || isLoading}
+              size="sm"
+            >
+              {isRefining ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Refining...
+                </>
+              ) : (
+                "Refine Tasks with Claude"
+              )}
+            </Button>
+          </div>
           {editedPRD.tasks.length === 0 ? (
             <Card>
               <CardContent className="py-8 text-center text-[hsl(var(--muted-foreground))]">
@@ -541,16 +577,28 @@ export function Planning() {
 
   // Check for existing planning session on mount
   useEffect(() => {
+    const setPendingQuestion = useAppStore.getState().setPendingQuestion;
+
     async function checkPlanningStatus() {
       try {
         const status = await getPlanningStatus();
         if (status.isPlanning) {
           setStage("conversation");
-          if (status.state === "waiting_input") {
+          if (status.state === "waiting_input" || status.pendingQuestion) {
             setPlanningState("waiting_input");
+            // Restore the pending question from server state
+            if (status.pendingQuestion) {
+              setPendingQuestion(status.pendingQuestion);
+            }
           } else {
             setPlanningState("planning");
           }
+        } else {
+          // Server has no active planning session - reset local state
+          setStage("input");
+          setMessages([]);
+          processedOutputsRef.current.clear();
+          setPlanningState("idle");
         }
       } catch {
         // Server not available or no session
@@ -573,12 +621,24 @@ export function Planning() {
     try {
       await startPlanning(idea);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Failed to start planning";
-      setError(message);
-      setStage("input");
-      setMessages([]);
-      setPlanningState("idle");
+      // Check if WebSocket events have already progressed the planning state
+      // If so, don't reset - the planning is actually working
+      const currentPlanningState = useAppStore.getState().planningSession;
+      const hasReceivedOutput = currentPlanningState.conversationOutput.length > 0;
+      const hasQuestion = currentPlanningState.pendingQuestion !== null;
+
+      if (hasReceivedOutput || hasQuestion) {
+        // Planning is working via WebSocket, ignore the HTTP timeout
+        console.log("[Planning] HTTP request timed out but WebSocket shows planning is progressing");
+      } else {
+        // No WebSocket progress, this is a real failure
+        const message =
+          err instanceof Error ? err.message : "Failed to start planning";
+        setError(message);
+        setStage("input");
+        setMessages([]);
+        setPlanningState("idle");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -711,6 +771,7 @@ export function Planning() {
           onConfirm={handleConfirm}
           onBack={handleBackFromReview}
           isLoading={isLoading}
+          onError={setError}
         />
       )}
     </div>

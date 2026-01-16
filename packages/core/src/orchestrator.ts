@@ -443,6 +443,21 @@ export class Orchestrator {
     this.planService.reset();
   }
 
+  /**
+   * Breaks down the PRD into refined tasks using Claude
+   *
+   * @param prd - The PRD to break down (defaults to current PRD)
+   * @returns Array of generated tasks
+   * @throws Error if no PRD exists
+   */
+  async breakIntoTasks(prd?: PRD): Promise<Task[]> {
+    const targetPRD = prd ?? await this.getPRD();
+    if (!targetPRD) {
+      throw new Error("No PRD exists to break down");
+    }
+    return await this.planService.breakIntoTasks(targetPRD);
+  }
+
   // ==========================================================================
   // Battle Management (delegates to BattleOrchestrator)
   // ==========================================================================

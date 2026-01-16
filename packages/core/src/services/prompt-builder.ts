@@ -58,11 +58,31 @@ export interface TaskContext {
  */
 export const PRD_OUTPUT_SCHEMA = {
   type: "object",
-  required: ["name", "description", "createdAt"],
+  required: ["name", "description", "createdAt", "tasks"],
   properties: {
     name: { type: "string", description: "Project name" },
     description: { type: "string", description: "Project description" },
     createdAt: { type: "string", format: "date-time", description: "ISO timestamp" },
+    tasks: {
+      type: "array",
+      minItems: 1,
+      description: "Array of tasks to complete the project",
+      items: {
+        type: "object",
+        required: ["id", "title", "description", "priority", "acceptanceCriteria"],
+        properties: {
+          id: { type: "string", description: "Unique ID format: 001-task-name" },
+          title: { type: "string", description: "Human-readable title" },
+          description: { type: "string", description: "Detailed description" },
+          priority: { type: "number", description: "Lower = higher priority (1 is highest)" },
+          acceptanceCriteria: {
+            type: "array",
+            items: { type: "string" },
+            description: "List of criteria for completion",
+          },
+        },
+      },
+    },
     metadata: {
       type: "object",
       properties: {
@@ -242,11 +262,17 @@ ${idea}
 
 1. Ask clarifying questions to understand the full scope
 2. Help the user refine their idea
-3. When ready, generate a PRD in JSON format
+3. When ready, generate a PRD with DETAILED TASKS in JSON format
 
 ## PRD Output Format
 
-When you generate the final PRD, output ONLY valid JSON matching this schema:
+When you generate the final PRD, you MUST include a "tasks" array with at least one task.
+Each task must have: id, title, description, priority, acceptanceCriteria.
+
+Task ID format: XXX-short-name (e.g., 001-setup-project, 002-implement-auth)
+Priority: Lower number = higher priority (1 is highest)
+
+Output ONLY valid JSON matching this schema:
 
 \`\`\`json
 ${JSON.stringify(PRD_OUTPUT_SCHEMA, null, 2)}

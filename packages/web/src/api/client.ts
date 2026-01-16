@@ -192,11 +192,36 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 /**
- * Makes a fetch request with standard headers
+ * Default timeout for API requests in milliseconds (30 seconds)
+ */
+const DEFAULT_TIMEOUT_MS = 30000;
+
+/**
+ * Longer timeout for Claude-powered operations (5 minutes)
+ * Used for planning and battle operations that involve Claude processing
+ */
+const CLAUDE_TIMEOUT_MS = 300000;
+
+/**
+ * Custom error class for network timeout errors
+ */
+export class ApiTimeoutError extends Error {
+  constructor(
+    message: string,
+    public readonly timeoutMs: number
+  ) {
+    super(message);
+    this.name = "ApiTimeoutError";
+  }
+}
+
+/**
+ * Makes a fetch request with standard headers and timeout support
  */
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<T> {
   const url = `${BASE_URL}${path}`;
   const method = options.method || "GET";
@@ -207,16 +232,35 @@ async function request<T>(
 
   log(`${method} ${path}`, options.body ? JSON.parse(options.body as string) : undefined);
 
+  // Create abort controller for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const response = await fetch(url, {
       ...options,
       headers,
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     const result = await handleResponse<T>(response);
     log(`${method} ${path} response`, result);
     return result;
   } catch (error) {
+    clearTimeout(timeoutId);
+
+    // Check if this was a timeout (abort)
+    if (error instanceof Error && error.name === "AbortError") {
+      const timeoutError = new ApiTimeoutError(
+        `Request to ${path} timed out after ${timeoutMs}ms`,
+        timeoutMs
+      );
+      logError(`${method} ${path} timed out`, timeoutError);
+      throw timeoutError;
+    }
+
     logError(`${method} ${path} failed`, error);
     throw error;
   }
@@ -398,35 +442,50 @@ export async function getPlanningStatus(): Promise<PlanningStatusResponse> {
 
 /**
  * Starts a new planning session
+ * Uses extended timeout since Claude processing can take time
  */
 export async function startPlanning(
   idea: string
 ): Promise<PlanningStartResponse> {
-  return request<PlanningStartResponse>("/api/planning/start", {
-    method: "POST",
-    body: JSON.stringify({ idea }),
-  });
+  return request<PlanningStartResponse>(
+    "/api/planning/start",
+    {
+      method: "POST",
+      body: JSON.stringify({ idea }),
+    },
+    CLAUDE_TIMEOUT_MS
+  );
 }
 
 /**
  * Sends an answer during planning
+ * Uses extended timeout since Claude processing can take time
  */
 export async function answerPlanningQuestion(
   answer: string
 ): Promise<PlanningAnswerResponse> {
-  return request<PlanningAnswerResponse>("/api/planning/answer", {
-    method: "POST",
-    body: JSON.stringify({ answer }),
-  });
+  return request<PlanningAnswerResponse>(
+    "/api/planning/answer",
+    {
+      method: "POST",
+      body: JSON.stringify({ answer }),
+    },
+    CLAUDE_TIMEOUT_MS
+  );
 }
 
 /**
  * Finishes planning and extracts the PRD
+ * Uses extended timeout since Claude processes the full conversation to generate PRD
  */
 export async function finishPlanning(): Promise<PlanningFinishResponse> {
-  return request<PlanningFinishResponse>("/api/planning/finish", {
-    method: "POST",
-  });
+  return request<PlanningFinishResponse>(
+    "/api/planning/finish",
+    {
+      method: "POST",
+    },
+    CLAUDE_TIMEOUT_MS
+  );
 }
 
 /**
@@ -436,6 +495,27 @@ export async function resetPlanning(): Promise<PlanningResetResponse> {
   return request<PlanningResetResponse>("/api/planning/reset", {
     method: "POST",
   });
+}
+
+/**
+ * Breakdown response containing refined tasks and updated PRD
+ */
+export interface BreakdownResponse {
+  message: string;
+  tasks: Task[];
+  prd: PRD;
+}
+
+/**
+ * Breaks down PRD into detailed tasks using Claude
+ * Uses extended timeout since Claude processing can take time
+ */
+export async function breakdownTasks(): Promise<BreakdownResponse> {
+  return request<BreakdownResponse>(
+    "/api/planning/breakdown",
+    { method: "POST" },
+    CLAUDE_TIMEOUT_MS
+  );
 }
 
 // ==========================================================================
@@ -451,6 +531,7 @@ export async function getCurrentBattle(): Promise<CurrentBattleResponse> {
 
 /**
  * Starts a battle for a task
+ * Uses extended timeout since Claude processes tasks over multiple iterations
  */
 export async function startBattle(
   taskId: string,
@@ -461,7 +542,8 @@ export async function startBattle(
     {
       method: "POST",
       body: mode ? JSON.stringify({ mode }) : undefined,
-    }
+    },
+    CLAUDE_TIMEOUT_MS
   );
 }
 
