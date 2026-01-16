@@ -3,13 +3,12 @@
 /*
  * PokéRalph Theme Configuration
  * 
- * Game Boy Color / Pokemon Yellow Aesthetic
+ * Skeuomorphic Game Boy Design System
  * 
- * Color palette inspired by the classic Game Boy Color screen:
- * - Light yellow-green (#9bbc0f) for backgrounds
- * - Dark green (#0f380f) for text and borders
- * - Medium greens for UI elements
- * - Blue accents for highlights
+ * Three zones:
+ * - Shell: Gray plastic (sidebar, header) - DMG Game Boy gray
+ * - Screen: Neutral (main content) - clean, modern feel
+ * - Battle: Game Boy green LCD (battle view only) - retro Pokemon feel
  */
 
 /* ===== Font Variables ===== */
@@ -18,179 +17,169 @@
   --font-pixel: "Press Start 2P", monospace;
   --font-pixel-readable: "VT323", monospace;
   
-  /* Border radius - all zero for sharp pixel edges */
-  --radius-sm: 0;
-  --radius-md: 0;
-  --radius-lg: 0;
-  --radius-xl: 0;
-  --radius-2xl: 0;
-  --radius-full: 0;
+  /* Border radius - slightly rounded for skeuomorphic feel */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-full: 9999px;
 }
 
 @layer base {
   :root {
-    /* ===== Game Boy Color Palette ===== */
+    /* ===== Shell Colors (Sidebar, Header - Gray Plastic) ===== */
+    --shell-bg: 240 5% 78%;           /* #c8c8c8 DMG gray */
+    --shell-light: 240 5% 88%;        /* Highlight */
+    --shell-dark: 240 5% 60%;         /* Shadow */
+    --shell-darker: 240 5% 45%;       /* Deep shadow */
+    --shell-border: 240 5% 50%;       /* Edge color */
+    --shell-fg: 240 5% 20%;           /* Text on shell */
     
-    /* Background: Light yellow-green (#9bbc0f) */
-    --background: 72 85% 40%;
-    /* Foreground: Dark green (#0f380f) */
-    --foreground: 120 60% 14%;
+    /* ===== Screen Colors (Main Content - Neutral) ===== */
+    --screen-bg: 220 15% 95%;         /* Slight blue-gray tint */
+    --screen-fg: 220 15% 15%;         /* Dark text */
+    --screen-card: 0 0% 100%;         /* White cards */
+    --screen-muted: 220 10% 90%;      /* Muted background */
+    --screen-muted-fg: 220 10% 45%;   /* Muted text */
+    --screen-border: 220 10% 80%;     /* Subtle borders */
+    
+    /* ===== Battle Colors (Game Boy Green LCD) ===== */
+    --battle-bg: 72 85% 40%;          /* #9bbc0f - Game Boy green */
+    --battle-fg: 120 60% 14%;         /* #0f380f - Dark green */
+    --battle-card: 72 85% 37%;        /* #8bac0f - Medium green */
+    --battle-muted: 72 60% 35%;       /* Darker green */
+    --battle-border: 120 60% 14%;     /* Dark green border */
+    
+    /* ===== Semantic Colors ===== */
+    --background: var(--screen-bg);
+    --foreground: var(--screen-fg);
+    --card: var(--screen-card);
+    --card-foreground: var(--screen-fg);
+    --popover: var(--screen-card);
+    --popover-foreground: var(--screen-fg);
+    
+    /* Primary: Purple accent (Game Boy Color) */
+    --primary: 270 50% 45%;
+    --primary-foreground: 0 0% 100%;
 
-    /* Card/Panel: Medium green (#8bac0f) */
-    --card: 72 85% 37%;
-    --card-foreground: 120 60% 14%;
-
-    /* Popover: Same as card */
-    --popover: 72 85% 37%;
-    --popover-foreground: 120 60% 14%;
-
-    /* Primary: Dark green for buttons (#306230) */
-    --primary: 120 35% 29%;
-    --primary-foreground: 72 85% 75%;
-
-    /* Secondary: Medium green (#8bac0f) */
-    --secondary: 72 85% 37%;
-    --secondary-foreground: 120 60% 14%;
-
-    /* Muted: Slightly darker green */
-    --muted: 72 60% 35%;
-    --muted-foreground: 120 40% 25%;
-
-    /* Accent: Blue from buildings (#5088a0) */
-    --accent: 198 35% 47%;
-    --accent-foreground: 72 85% 90%;
-
-    /* Destructive: Dark red-brown tint */
-    --destructive: 0 40% 35%;
-    --destructive-foreground: 72 85% 90%;
-
-    /* Success: Dark green (same as primary) */
-    --success: 120 35% 29%;
-    --success-foreground: 72 85% 75%;
-
-    /* Warning: Light yellow-green */
-    --warning: 72 85% 40%;
-    --warning-foreground: 120 60% 14%;
-
-    /* Borders & inputs: Dark green (#0f380f) */
-    --border: 120 60% 14%;
-    --input: 120 60% 14%;
-    --ring: 120 60% 14%;
-
-    /* Chart colors - Game Boy palette variations */
-    --chart-1: 120 35% 29%;
-    --chart-2: 72 85% 40%;
-    --chart-3: 198 35% 47%;
-    --chart-4: 72 60% 50%;
-    --chart-5: 120 60% 20%;
-
-    /* Sidebar: Slightly different shade */
-    --sidebar-background: 72 70% 35%;
-    --sidebar-foreground: 120 60% 14%;
-    --sidebar-primary: 120 35% 29%;
-    --sidebar-primary-foreground: 72 85% 75%;
-    --sidebar-accent: 72 85% 40%;
-    --sidebar-accent-foreground: 120 60% 14%;
-    --sidebar-border: 120 60% 14%;
-    --sidebar-ring: 120 60% 14%;
-  }
-
-  /* Dark mode: Inverted Game Boy palette (darker overall) */
-  .dark {
-    /* Background: Dark green */
-    --background: 120 60% 10%;
-    /* Foreground: Light yellow-green */
-    --foreground: 72 85% 70%;
-
-    /* Card: Slightly lighter dark green */
-    --card: 120 50% 15%;
-    --card-foreground: 72 85% 70%;
-
-    /* Popover */
-    --popover: 120 50% 15%;
-    --popover-foreground: 72 85% 70%;
-
-    /* Primary: Medium green for buttons */
-    --primary: 72 85% 40%;
-    --primary-foreground: 120 60% 10%;
-
-    /* Secondary */
-    --secondary: 120 40% 20%;
-    --secondary-foreground: 72 85% 70%;
+    /* Secondary: Shell gray */
+    --secondary: var(--shell-bg);
+    --secondary-foreground: var(--shell-fg);
 
     /* Muted */
-    --muted: 120 30% 18%;
-    --muted-foreground: 72 60% 55%;
+    --muted: var(--screen-muted);
+    --muted-foreground: var(--screen-muted-fg);
 
-    /* Accent: Blue */
-    --accent: 198 35% 40%;
-    --accent-foreground: 72 85% 85%;
+    /* Accent: Game Boy teal-ish */
+    --accent: 180 30% 45%;
+    --accent-foreground: 0 0% 100%;
 
-    /* Destructive */
-    --destructive: 0 50% 40%;
-    --destructive-foreground: 72 85% 90%;
+    /* Destructive: Red */
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
 
-    /* Success */
-    --success: 72 85% 40%;
-    --success-foreground: 120 60% 10%;
+    /* Success: Green */
+    --success: 120 45% 40%;
+    --success-foreground: 0 0% 100%;
 
-    /* Warning */
-    --warning: 72 70% 50%;
-    --warning-foreground: 120 60% 10%;
+    /* Warning: Amber */
+    --warning: 40 90% 50%;
+    --warning-foreground: 0 0% 10%;
 
-    /* Borders: Light green in dark mode */
-    --border: 72 60% 35%;
-    --input: 72 60% 35%;
-    --ring: 72 85% 40%;
+    /* Borders & inputs */
+    --border: var(--screen-border);
+    --input: var(--screen-border);
+    --ring: var(--primary);
 
     /* Chart colors */
-    --chart-1: 72 85% 40%;
-    --chart-2: 120 40% 30%;
-    --chart-3: 198 35% 50%;
-    --chart-4: 72 60% 55%;
-    --chart-5: 120 50% 25%;
+    --chart-1: 270 50% 45%;
+    --chart-2: 180 30% 45%;
+    --chart-3: 120 45% 40%;
+    --chart-4: 0 70% 50%;
+    --chart-5: 40 90% 50%;
 
+    /* Sidebar uses shell colors */
+    --sidebar-background: var(--shell-bg);
+    --sidebar-foreground: var(--shell-fg);
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: var(--primary-foreground);
+    --sidebar-accent: var(--shell-light);
+    --sidebar-accent-foreground: var(--shell-fg);
+    --sidebar-border: var(--shell-dark);
+    --sidebar-ring: var(--primary);
+  }
+
+  /* Dark mode */
+  .dark {
+    /* Shell stays similar but slightly darker */
+    --shell-bg: 240 5% 25%;
+    --shell-light: 240 5% 35%;
+    --shell-dark: 240 5% 15%;
+    --shell-darker: 240 5% 10%;
+    --shell-border: 240 5% 20%;
+    --shell-fg: 240 5% 90%;
+    
+    /* Screen goes dark */
+    --screen-bg: 220 15% 10%;
+    --screen-fg: 220 10% 90%;
+    --screen-card: 220 15% 15%;
+    --screen-muted: 220 10% 18%;
+    --screen-muted-fg: 220 10% 60%;
+    --screen-border: 220 10% 25%;
+    
+    /* Battle colors stay vibrant */
+    --battle-bg: 72 85% 35%;
+    --battle-fg: 72 85% 75%;
+    --battle-card: 72 70% 25%;
+    --battle-muted: 72 50% 20%;
+    --battle-border: 72 60% 50%;
+    
+    /* Update semantic colors */
+    --background: var(--screen-bg);
+    --foreground: var(--screen-fg);
+    --card: var(--screen-card);
+    --card-foreground: var(--screen-fg);
+    --popover: var(--screen-card);
+    --popover-foreground: var(--screen-fg);
+    --muted: var(--screen-muted);
+    --muted-foreground: var(--screen-muted-fg);
+    --border: var(--screen-border);
+    --input: var(--screen-border);
+    
     /* Sidebar */
-    --sidebar-background: 120 50% 12%;
-    --sidebar-foreground: 72 85% 70%;
-    --sidebar-primary: 72 85% 40%;
-    --sidebar-primary-foreground: 120 60% 10%;
-    --sidebar-accent: 120 40% 20%;
-    --sidebar-accent-foreground: 72 85% 70%;
-    --sidebar-border: 72 60% 35%;
-    --sidebar-ring: 72 85% 40%;
+    --sidebar-background: var(--shell-bg);
+    --sidebar-foreground: var(--shell-fg);
+    --sidebar-accent: var(--shell-light);
+    --sidebar-accent-foreground: var(--shell-fg);
+    --sidebar-border: var(--shell-dark);
   }
 }
 
 /* ===== Base Styles ===== */
 @layer base {
-  /* Force no border-radius on everything for pixel-perfect edges */
   * {
     @apply border-[hsl(var(--border))];
-    border-radius: 0 !important;
   }
 
   html {
-    /* Disable smooth scrolling for retro feel */
-    scroll-behavior: auto;
+    scroll-behavior: smooth;
   }
 
   body {
-    @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))];
+    @apply bg-[hsl(var(--shell-bg))] text-[hsl(var(--foreground))];
     font-family: "Press Start 2P", monospace;
     font-size: 10px;
     line-height: 1.8;
-    /* Disable font smoothing for crispy pixel text */
-    -webkit-font-smoothing: none;
-    -moz-osx-font-smoothing: unset;
-    text-rendering: optimizeSpeed;
-    image-rendering: pixelated;
+    /* Keep pixel fonts crispy */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   /* Use VT323 for larger, more readable text blocks */
   p, .text-readable {
     font-family: "VT323", monospace;
-    font-size: 16px;
+    font-size: 18px;
     line-height: 1.4;
   }
 
@@ -256,66 +245,33 @@
   }
 }
 
-/* ===== Override soft shadows with hard pixel shadows ===== */
-.shadow,
-.shadow-sm,
-.shadow-md,
-.shadow-lg,
-.shadow-xl,
-.shadow-2xl {
-  box-shadow: 3px 3px 0 hsl(var(--border)) !important;
+/* ===== Shadow utilities ===== */
+.shadow-shell {
+  box-shadow: 
+    0 4px 0 hsl(var(--shell-darker)),
+    0 6px 12px rgba(0, 0, 0, 0.2);
 }
 
-/* ===== Disable transitions for chunky 8-bit feel ===== */
-*,
-*::before,
-*::after {
-  transition-property: none !important;
-  transition-duration: 0s !important;
-  animation-duration: 0.01s !important;
+.shadow-inset {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* Allow specific animations we want to keep */
+/* ===== Smooth transitions for skeuomorphic feel ===== */
+.transition-press {
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+/* Allow animations */
 .animate-spin {
-  animation: spin 1s linear infinite !important;
+  animation: spin 1s linear infinite;
 }
 
 .animate-pulse {
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite !important;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 .animate-bounce {
-  animation: bounce 1s infinite !important;
-}
-
-/* ===== Thicker borders for pixel aesthetic ===== */
-.border,
-[class*="border-"] {
-  border-width: 2px;
-  border-style: solid;
-}
-
-.border-b,
-.border-t,
-.border-l,
-.border-r {
-  border-width: 0;
-}
-
-.border-b {
-  border-bottom-width: 2px;
-}
-
-.border-t {
-  border-top-width: 2px;
-}
-
-.border-l {
-  border-left-width: 2px;
-}
-
-.border-r {
-  border-right-width: 2px;
+  animation: bounce 1s infinite;
 }
 
 /* ===== Animations (kept for specific use cases) ===== */
@@ -342,21 +298,201 @@
   }
 }
 
-/* ===== Game Boy Style Dialog/Menu Boxes ===== */
-.gb-box {
-  border: 4px solid hsl(var(--border));
-  background: hsl(var(--card));
-  box-shadow: 4px 4px 0 hsl(var(--border));
-  padding: 12px;
+/* ===== Skeuomorphic Shell Styles ===== */
+
+/* Plastic texture - subtle noise pattern */
+.shell-plastic {
+  background: 
+    linear-gradient(
+      135deg,
+      hsl(var(--shell-light)) 0%,
+      hsl(var(--shell-bg)) 30%,
+      hsl(var(--shell-bg)) 70%,
+      hsl(var(--shell-dark)) 100%
+    );
+  /* Subtle plastic grain texture */
+  background-color: hsl(var(--shell-bg));
 }
 
-/* Double border effect like Pokemon menus */
-.gb-box-double {
-  border: 2px solid hsl(var(--border));
-  outline: 2px solid hsl(var(--border));
-  outline-offset: 2px;
-  background: hsl(var(--card));
-  padding: 12px;
+/* Raised 3D element - for navigation items, buttons on shell */
+.shell-raised {
+  background: linear-gradient(
+    to bottom,
+    hsl(var(--shell-light)) 0%,
+    hsl(var(--shell-bg)) 50%,
+    hsl(var(--shell-dark)) 100%
+  );
+  border: 2px solid hsl(var(--shell-border));
+  border-radius: 6px;
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 3px 0 hsl(var(--shell-darker)),
+    0 4px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* Pressed state for shell elements */
+.shell-pressed {
+  background: linear-gradient(
+    to bottom,
+    hsl(var(--shell-dark)) 0%,
+    hsl(var(--shell-bg)) 100%
+  );
+  box-shadow: 
+    inset 0 2px 4px rgba(0, 0, 0, 0.3),
+    0 1px 0 hsl(var(--shell-darker));
+  transform: translateY(2px);
+}
+
+/* Recessed groove in shell - for screen bezel */
+.shell-groove {
+  background: hsl(var(--shell-darker));
+  border-radius: 8px;
+  box-shadow: 
+    inset 0 2px 6px rgba(0, 0, 0, 0.4),
+    inset 0 1px 2px rgba(0, 0, 0, 0.2);
+  padding: 8px;
+}
+
+/* ===== Screen Area (Neutral Main Content) ===== */
+
+.screen-area {
+  background: hsl(var(--screen-bg));
+  border-radius: 4px;
+  box-shadow: 
+    inset 0 2px 8px rgba(0, 0, 0, 0.1),
+    inset 0 0 2px rgba(0, 0, 0, 0.1);
+}
+
+/* ===== Battle LCD Screen (Game Boy Green) ===== */
+
+.battle-lcd {
+  position: relative;
+  background: hsl(var(--battle-bg));
+  border: 4px solid hsl(120 60% 10%);
+  border-radius: 4px;
+  box-shadow: 
+    inset 0 0 30px rgba(0, 0, 0, 0.15),
+    inset 0 0 4px rgba(0, 0, 0, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.2);
+  color: hsl(var(--battle-fg));
+}
+
+/* LCD scanline overlay */
+.battle-lcd::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, 0.04) 2px,
+    rgba(0, 0, 0, 0.04) 4px
+  );
+  border-radius: 2px;
+}
+
+/* Battle-specific card styling */
+.battle-card {
+  background: hsl(var(--battle-card));
+  border: 3px solid hsl(var(--battle-fg));
+  box-shadow: 3px 3px 0 hsl(var(--battle-fg));
+  color: hsl(var(--battle-fg));
+}
+
+/* Battle dialog box with corner decorations */
+.battle-dialog {
+  position: relative;
+  background: hsl(var(--battle-card));
+  border: 4px solid hsl(var(--battle-fg));
+  padding: 16px 20px;
+}
+
+.battle-dialog::before,
+.battle-dialog::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border: 3px solid hsl(var(--battle-fg));
+  background: hsl(var(--battle-card));
+}
+
+.battle-dialog::before {
+  bottom: -2px;
+  left: -2px;
+  border-right: none;
+  border-top: none;
+}
+
+.battle-dialog::after {
+  bottom: -2px;
+  right: -2px;
+  border-left: none;
+  border-top: none;
+}
+
+/* Pokeball indicator (for party/progress) */
+.pokeball-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50% !important;
+  border: 2px solid hsl(var(--battle-fg));
+  background: linear-gradient(
+    to bottom,
+    hsl(3 74% 55%) 0%,
+    hsl(3 74% 55%) 45%,
+    hsl(var(--battle-fg)) 45%,
+    hsl(var(--battle-fg)) 55%,
+    hsl(0 0% 95%) 55%,
+    hsl(0 0% 95%) 100%
+  );
+}
+
+.pokeball-indicator.empty {
+  background: linear-gradient(
+    to bottom,
+    hsl(72 40% 60%) 0%,
+    hsl(72 40% 60%) 45%,
+    hsl(var(--battle-fg)) 45%,
+    hsl(var(--battle-fg)) 55%,
+    hsl(72 85% 70%) 55%,
+    hsl(72 85% 70%) 100%
+  );
+  opacity: 0.5;
+}
+
+.pokeball-indicator.success {
+  background: linear-gradient(
+    to bottom,
+    hsl(120 50% 35%) 0%,
+    hsl(120 50% 35%) 45%,
+    hsl(var(--battle-fg)) 45%,
+    hsl(var(--battle-fg)) 55%,
+    hsl(120 50% 60%) 55%,
+    hsl(120 50% 60%) 100%
+  );
+}
+
+/* HP Bar for battle view */
+.battle-hp-bar {
+  height: 8px;
+  background: hsl(var(--battle-card));
+  border: 2px solid hsl(var(--battle-fg));
+}
+
+.battle-hp-bar-fill {
+  height: 100%;
+  background: hsl(120 60% 30%);
+}
+
+.battle-hp-bar-fill.warning {
+  background: hsl(45 80% 45%);
+}
+
+.battle-hp-bar-fill.danger {
+  background: hsl(0 70% 45%);
 }
 
 /* ===== Scanline overlay effect (optional) ===== */
@@ -369,14 +505,14 @@
     0deg,
     transparent,
     transparent 2px,
-    rgba(0, 0, 0, 0.03) 2px,
-    rgba(0, 0, 0, 0.03) 4px
+    rgba(0, 0, 0, 0.02) 2px,
+    rgba(0, 0, 0, 0.02) 4px
   );
 }
 
 /* ===== Pixel cursor (optional enhancement) ===== */
 .cursor-pixel {
-  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect x='0' y='0' width='4' height='4' fill='%230f380f'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%230f380f'/%3E%3Crect x='8' y='8' width='4' height='4' fill='%230f380f'/%3E%3C/svg%3E"), auto;
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect x='0' y='0' width='4' height='4' fill='%231a1a1a'/%3E%3Crect x='4' y='4' width='4' height='4' fill='%231a1a1a'/%3E%3Crect x='8' y='8' width='4' height='4' fill='%231a1a1a'/%3E%3C/svg%3E"), auto;
 }
 
 /* ===== Responsive Typography ===== */

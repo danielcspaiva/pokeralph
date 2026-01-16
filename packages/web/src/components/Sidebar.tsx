@@ -11,7 +11,6 @@ import { useTasks, useTaskCounts } from "@/stores/app-store";
 import { TaskCard } from "./TaskCard";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 interface SidebarProps {
@@ -45,14 +44,15 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r border-[hsl(var(--sidebar-border))] bg-[hsl(var(--sidebar-background))] transition-transform duration-300 lg:static lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-50 flex w-72 flex-col shell-plastic lg:static lg:translate-x-0",
+          "border-r-4 border-[hsl(var(--shell-darker))] shadow-[4px_0_8px_rgba(0,0,0,0.2)]",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        {/* Header */}
-        <div className="flex h-14 items-center justify-between px-4">
-          <h2 className="text-lg font-semibold text-[hsl(var(--sidebar-foreground))]">
-            Tasks
+        {/* Header - raised section */}
+        <div className="flex h-14 items-center justify-between px-4 border-b-2 border-[hsl(var(--shell-dark))] bg-gradient-to-b from-[hsl(var(--shell-light))] to-[hsl(var(--shell-bg))]">
+          <h2 className="font-bold text-[hsl(var(--shell-fg))]">
+            TASKS
           </h2>
           <Button
             variant="ghost"
@@ -65,47 +65,45 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
           </Button>
         </div>
 
-        <Separator />
-
-        {/* Stats */}
-        <div className="flex items-center justify-around px-4 py-3">
-          <div className="text-center">
-            <div className="text-xl font-bold text-[hsl(var(--success))]">
-              {counts.completed}
+        {/* Stats - recessed display */}
+        <div className="mx-3 mt-3 p-3 rounded-lg bg-[hsl(var(--shell-darker))] shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)]">
+          <div className="flex items-center justify-around bg-[hsl(var(--screen-bg))] rounded p-2 shadow-[inset_0_1px_3px_rgba(0,0,0,0.1)]">
+            <div className="text-center">
+              <div className="text-lg font-bold text-[hsl(var(--success))]">
+                {counts.completed}
+              </div>
+              <div className="text-xs text-[hsl(var(--screen-muted-fg))]">
+                Done
+              </div>
             </div>
-            <div className="text-xs text-[hsl(var(--muted-foreground))]">
-              Done
+            <div className="text-center">
+              <div className="text-lg font-bold text-[hsl(var(--primary))]">
+                {counts.in_progress}
+              </div>
+              <div className="text-xs text-[hsl(var(--screen-muted-fg))]">
+                Active
+              </div>
             </div>
-          </div>
-          <div className="text-center">
-            <div className="text-xl font-bold text-[hsl(var(--warning))]">
-              {counts.in_progress}
-            </div>
-            <div className="text-xs text-[hsl(var(--muted-foreground))]">
-              Active
-            </div>
-          </div>
-          <div className="text-center">
-            <div className="text-xl font-bold text-[hsl(var(--muted-foreground))]">
-              {counts.pending}
-            </div>
-            <div className="text-xs text-[hsl(var(--muted-foreground))]">
-              Pending
+            <div className="text-center">
+              <div className="text-lg font-bold text-[hsl(var(--screen-muted-fg))]">
+                {counts.pending}
+              </div>
+              <div className="text-xs text-[hsl(var(--screen-muted-fg))]">
+                Queue
+              </div>
             </div>
           </div>
         </div>
 
-        <Separator />
-
-        {/* Navigation */}
-        <nav className="space-y-1 px-3 py-2">
+        {/* Navigation - raised buttons */}
+        <nav className="space-y-2 px-3 py-3">
           <Link
             to="/"
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "flex items-center gap-3 px-3 py-2 text-sm font-bold rounded-md transition-press",
               location.pathname === "/"
-                ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]"
-                : "text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-accent-foreground))]"
+                ? "shell-raised bg-gradient-to-b from-[hsl(var(--primary))] to-[hsl(270_50%_38%)] text-white shadow-[0_3px_0_hsl(270_50%_30%),0_4px_8px_rgba(0,0,0,0.25)]"
+                : "shell-raised text-[hsl(var(--shell-fg))] hover:brightness-105 active:shell-pressed"
             )}
           >
             <LayoutDashboard className="h-4 w-4" />
@@ -114,10 +112,10 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
           <Link
             to="/planning"
             className={cn(
-              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+              "flex items-center gap-3 px-3 py-2 text-sm font-bold rounded-md transition-press",
               location.pathname === "/planning"
-                ? "bg-[hsl(var(--sidebar-accent))] text-[hsl(var(--sidebar-accent-foreground))]"
-                : "text-[hsl(var(--sidebar-foreground))] hover:bg-[hsl(var(--sidebar-accent))] hover:text-[hsl(var(--sidebar-accent-foreground))]"
+                ? "shell-raised bg-gradient-to-b from-[hsl(var(--primary))] to-[hsl(270_50%_38%)] text-white shadow-[0_3px_0_hsl(270_50%_30%),0_4px_8px_rgba(0,0,0,0.25)]"
+                : "shell-raised text-[hsl(var(--shell-fg))] hover:brightness-105 active:shell-pressed"
             )}
           >
             <Sparkles className="h-4 w-4" />
@@ -125,13 +123,14 @@ export function Sidebar({ isOpen, onToggle }: SidebarProps) {
           </Link>
         </nav>
 
-        <Separator />
+        {/* Divider groove */}
+        <div className="mx-3 h-1 rounded bg-[hsl(var(--shell-darker))] shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]" />
 
         {/* Task list */}
-        <ScrollArea className="flex-1 px-3 py-2">
+        <ScrollArea className="flex-1 px-3 py-3">
           {tasks.length === 0 ? (
-            <p className="px-3 py-4 text-center text-sm text-[hsl(var(--muted-foreground))]">
-              No tasks yet. Start planning!
+            <p className="px-3 py-4 text-center text-sm text-[hsl(var(--shell-fg))] opacity-60">
+              No tasks yet
             </p>
           ) : (
             <div className="space-y-2">

@@ -21,13 +21,7 @@ interface TaskCardProps {
  */
 interface StatusConfig {
   label: string;
-  variant:
-    | "pending"
-    | "planning"
-    | "in_progress"
-    | "paused"
-    | "completed"
-    | "failed";
+  variant: "default" | "secondary" | "success" | "warning" | "destructive";
   dotClass: string;
 }
 
@@ -36,8 +30,8 @@ interface StatusConfig {
  */
 const defaultStatusConfig: StatusConfig = {
   label: "Pending",
-  variant: "pending",
-  dotClass: "bg-[hsl(var(--muted-foreground))]",
+  variant: "secondary",
+  dotClass: "bg-[hsl(var(--screen-muted))]",
 };
 
 /**
@@ -46,32 +40,32 @@ const defaultStatusConfig: StatusConfig = {
 const statusConfig: Record<string, StatusConfig> = {
   pending: {
     label: "Pending",
-    variant: "pending",
-    dotClass: "bg-[hsl(var(--muted-foreground))]",
+    variant: "secondary",
+    dotClass: "bg-[hsl(var(--screen-muted-fg))]",
   },
   planning: {
     label: "Planning",
-    variant: "planning",
-    dotClass: "bg-blue-500",
+    variant: "secondary",
+    dotClass: "bg-blue-400",
   },
   in_progress: {
-    label: "In Progress",
-    variant: "in_progress",
-    dotClass: "bg-[hsl(var(--warning))]",
+    label: "Active",
+    variant: "default",
+    dotClass: "bg-[hsl(var(--primary))]",
   },
   paused: {
     label: "Paused",
-    variant: "paused",
-    dotClass: "bg-orange-500",
+    variant: "warning",
+    dotClass: "bg-[hsl(var(--warning))]",
   },
   completed: {
-    label: "Completed",
-    variant: "completed",
+    label: "Done",
+    variant: "success",
     dotClass: "bg-[hsl(var(--success))]",
   },
   failed: {
     label: "Failed",
-    variant: "failed",
+    variant: "destructive",
     dotClass: "bg-[hsl(var(--destructive))]",
   },
 };
@@ -91,23 +85,27 @@ export function TaskCard({ task }: TaskCardProps) {
 
   return (
     <Link to={`/task/${task.id}`} className="block">
-      <Card className="p-3 transition-colors hover:bg-[hsl(var(--accent))]">
+      <Card className="p-3 hover:shadow-md transition-shadow">
         <div className="flex items-center gap-2">
-          <span
-            className={cn("h-2 w-2 shrink-0 rounded-full", config.dotClass)}
+          {/* Status indicator */}
+          <div
+            className={cn(
+              "h-2.5 w-2.5 shrink-0 rounded-full",
+              config.dotClass
+            )}
           />
-          <span className="text-xs text-[hsl(var(--muted-foreground))]">
+          <span className="text-xs text-[hsl(var(--screen-muted-fg))]">
             #{task.priority}
           </span>
         </div>
-        <h3 className="mt-1 line-clamp-2 text-sm font-medium">{task.title}</h3>
+        <h3 className="mt-1 line-clamp-2 text-sm font-medium text-[hsl(var(--screen-fg))]">{task.title}</h3>
         <div className="mt-2 flex items-center justify-between">
           <Badge variant={config.variant} className="text-xs">
             {config.label}
           </Badge>
           {task.acceptanceCriteria.length > 0 && (
-            <span className="text-xs text-[hsl(var(--muted-foreground))]">
-              {task.acceptanceCriteria.length} criteria
+            <span className="text-xs text-[hsl(var(--screen-muted-fg))]">
+              {task.acceptanceCriteria.length} AC
             </span>
           )}
         </div>

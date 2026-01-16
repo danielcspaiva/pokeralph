@@ -46,7 +46,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress as ProgressBar } from "@/components/ui/progress";
+import { PokeballIndicator, HPBar } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 // ==========================================================================
@@ -101,7 +101,7 @@ function Timer({ startTime, isRunning }: TimerProps) {
   };
 
   return (
-    <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
+    <div className="flex items-center gap-2 text-[hsl(var(--battle-fg))] opacity-70">
       <Clock className="h-4 w-4" />
       <span className="font-mono">{formatTime(elapsed)}</span>
     </div>
@@ -159,44 +159,40 @@ function LogArea({ logs, lastOutput, isRunning }: LogAreaProps) {
   }, [logs.length, lastOutput]);
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Output</CardTitle>
-          {isRunning && (
-            <div className="flex items-center gap-2 text-sm text-[hsl(var(--success))]">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[hsl(var(--success))] opacity-75" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-[hsl(var(--success))]" />
-              </span>
-              Live
-            </div>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <ScrollArea className="h-64 rounded-md bg-[hsl(var(--muted)/0.5)] p-4 font-mono text-sm">
-          {logs.length === 0 && !lastOutput ? (
-            <div className="text-[hsl(var(--muted-foreground))]">
-              {isRunning ? "Waiting for output..." : "No output yet"}
-            </div>
-          ) : (
-            <>
-              {logs.map((log, idx) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: Log lines are streaming and don't have stable IDs
-                <div key={`log-${idx}`} className="whitespace-pre-wrap">
-                  {log}
-                </div>
-              ))}
-              {lastOutput && (
-                <div className="whitespace-pre-wrap">{lastOutput}</div>
-              )}
-            </>
-          )}
-          <div ref={logsEndRef} />
-        </ScrollArea>
-      </CardContent>
-    </Card>
+    <div className="battle-card p-4">
+      <div className="flex items-center justify-between mb-3">
+        <span className="font-bold text-sm text-[hsl(var(--battle-fg))]">OUTPUT</span>
+        {isRunning && (
+          <div className="flex items-center gap-2 text-sm text-[hsl(120_50%_30%)]">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[hsl(120_50%_30%)] opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-[hsl(120_50%_30%)]" />
+            </span>
+            LIVE
+          </div>
+        )}
+      </div>
+      <ScrollArea className="h-64 bg-[hsl(var(--battle-bg))] border-3 border-[hsl(var(--battle-fg))] p-4 font-mono text-sm text-[hsl(var(--battle-fg))]">
+        {logs.length === 0 && !lastOutput ? (
+          <div className="opacity-60">
+            {isRunning ? "Waiting for output..." : "No output yet"}
+          </div>
+        ) : (
+          <>
+            {logs.map((log, idx) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: Log lines are streaming and don't have stable IDs
+              <div key={`log-${idx}`} className="whitespace-pre-wrap">
+                {log}
+              </div>
+            ))}
+            {lastOutput && (
+              <div className="whitespace-pre-wrap">{lastOutput}</div>
+            )}
+          </>
+        )}
+        <div ref={logsEndRef} />
+      </ScrollArea>
+    </div>
   );
 }
 
@@ -209,28 +205,26 @@ interface TaskInfoProps {
 
 function TaskInfo({ task }: TaskInfoProps) {
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary">#{task.priority}</Badge>
-          <CardTitle>{task.title}</CardTitle>
+    <div className="battle-card p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="px-2 py-1 bg-[hsl(var(--battle-bg))] border-2 border-[hsl(var(--battle-fg))] text-xs font-bold">
+          #{task.priority}
+        </span>
+        <h3 className="font-bold text-[hsl(var(--battle-fg))]">{task.title}</h3>
+      </div>
+      <p className="text-[hsl(var(--battle-fg))] opacity-80 mb-3">{task.description}</p>
+      {task.acceptanceCriteria.length > 0 && (
+        <div>
+          <span className="text-sm font-bold text-[hsl(var(--battle-fg))]">Acceptance Criteria</span>
+          <ul className="mt-2 list-inside list-disc text-sm text-[hsl(var(--battle-fg))] opacity-80">
+            {task.acceptanceCriteria.map((criterion, idx) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: Acceptance criteria are static and don't change order
+              <li key={`criterion-${idx}`}>{criterion}</li>
+            ))}
+          </ul>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <p className="text-[hsl(var(--muted-foreground))]">{task.description}</p>
-        {task.acceptanceCriteria.length > 0 && (
-          <div>
-            <span className="text-sm font-medium">Acceptance Criteria</span>
-            <ul className="mt-2 list-inside list-disc text-sm text-[hsl(var(--muted-foreground))]">
-              {task.acceptanceCriteria.map((criterion, idx) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: Acceptance criteria are static and don't change order
-                <li key={`criterion-${idx}`}>{criterion}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }
 
@@ -244,29 +238,27 @@ interface SuccessMessageProps {
 
 function SuccessMessage({ taskTitle, taskId }: SuccessMessageProps) {
   return (
-    <Card className="border-[hsl(var(--success))] bg-[hsl(var(--success)/0.1)]">
-      <CardContent className="py-8 text-center">
-        <div className="mb-4 flex justify-center gap-2 text-4xl">
-          <PartyPopper className="h-12 w-12 text-[hsl(var(--success))]" />
-        </div>
-        <h3 className="text-xl font-bold text-[hsl(var(--success))]">
-          Battle Complete!
-        </h3>
-        <p className="mt-2 text-[hsl(var(--muted-foreground))]">
-          Successfully completed: <strong>{taskTitle}</strong>
-        </p>
-        <div className="mt-6 flex justify-center gap-2">
-          <Button asChild>
-            <Link to="/">Back to Dashboard</Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link to={`/history/${encodeURIComponent(taskId)}`}>
-              View History
-            </Link>
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="battle-card p-6 text-center border-[hsl(120_50%_25%)]">
+      <div className="mb-4 flex justify-center gap-2">
+        <PartyPopper className="h-10 w-10 text-[hsl(120_50%_25%)]" />
+      </div>
+      <h3 className="text-lg font-bold text-[hsl(120_50%_25%)]">
+        VICTORY!
+      </h3>
+      <p className="mt-3 text-[hsl(var(--battle-fg))] opacity-80">
+        {taskTitle} was defeated!
+      </p>
+      <div className="mt-6 flex justify-center gap-2">
+        <Button variant="battle" asChild>
+          <Link to="/">Continue</Link>
+        </Button>
+        <Button variant="battle" asChild>
+          <Link to={`/history/${encodeURIComponent(taskId)}`}>
+            View History
+          </Link>
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -280,20 +272,18 @@ interface ErrorMessageProps {
 
 function ErrorMessage({ error, taskTitle }: ErrorMessageProps) {
   return (
-    <Card className="border-[hsl(var(--destructive))] bg-[hsl(var(--destructive)/0.1)]">
-      <CardContent className="py-8 text-center">
-        <AlertCircle className="mx-auto mb-4 h-12 w-12 text-[hsl(var(--destructive))]" />
-        <h3 className="text-xl font-bold text-[hsl(var(--destructive))]">
-          Battle Failed
-        </h3>
-        <p className="mt-2 text-[hsl(var(--muted-foreground))]">
-          Task &quot;<strong>{taskTitle}</strong>&quot; encountered an error:
-        </p>
-        <div className="mt-4 rounded-md bg-[hsl(var(--muted))] p-4 text-sm">
-          {error}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="battle-card p-6 text-center border-[hsl(0_60%_40%)]">
+      <AlertCircle className="mx-auto mb-4 h-10 w-10 text-[hsl(0_60%_40%)]" />
+      <h3 className="text-lg font-bold text-[hsl(0_60%_40%)]">
+        FAINTED!
+      </h3>
+      <p className="mt-3 text-[hsl(var(--battle-fg))] opacity-80">
+        {taskTitle} could not be completed.
+      </p>
+      <div className="mt-4 bg-[hsl(var(--battle-bg))] border-3 border-[hsl(var(--battle-fg))] p-3 text-sm text-left text-[hsl(var(--battle-fg))]">
+        {error}
+      </div>
+    </div>
   );
 }
 
@@ -550,54 +540,69 @@ export function Battle() {
       : 0;
 
   return (
-    <div className="space-y-6">
+    <div className="battle-lcd p-6 space-y-6 min-h-full">
       {/* Task info section */}
       <TaskInfo task={task} />
 
-      {/* Status section */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="mb-4 flex items-center justify-between">
+      {/* Status section - Battle HUD style */}
+      <div className="battle-card p-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          {/* Left side - Status and feedback */}
+          <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
-              <Badge
-                variant={
-                  stage === "running"
-                    ? "default"
-                    : stage === "completed"
-                      ? "success"
-                      : stage === "failed"
-                        ? "destructive"
-                        : stage === "awaiting_approval"
-                          ? "warning"
-                          : "secondary"
-                }
-              >
-                {stage === "idle" && "Ready"}
-                {stage === "running" && "Running"}
-                {stage === "paused" && "Paused"}
-                {stage === "awaiting_approval" && "Awaiting Approval"}
-                {stage === "completed" && "Completed"}
-                {stage === "failed" && "Failed"}
-              </Badge>
-              <FeedbackStatus results={progress?.feedbackResults ?? null} />
+              <span className={`px-2 py-1 text-xs font-bold border-2 border-[hsl(var(--battle-fg))] ${
+                stage === "completed" ? "bg-[hsl(120_50%_30%)]" : 
+                stage === "failed" ? "bg-[hsl(0_50%_35%)]" : 
+                "bg-[hsl(var(--battle-card))]"
+              } text-[hsl(var(--battle-fg))]`}>
+                {stage === "idle" && "READY"}
+                {stage === "running" && "BATTLING"}
+                {stage === "paused" && "PAUSED"}
+                {stage === "awaiting_approval" && "REVIEW"}
+                {stage === "completed" && "VICTORY"}
+                {stage === "failed" && "FAINTED"}
+              </span>
+              <Timer
+                startTime={iterationStartTime}
+                isRunning={stage === "running"}
+              />
             </div>
-            <Timer
-              startTime={iterationStartTime}
-              isRunning={stage === "running"}
-            />
+            <FeedbackStatus results={progress?.feedbackResults ?? null} />
           </div>
 
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>
-                Iteration {currentIteration} of {maxIterations}
+          {/* Right side - Iteration indicators (pokeball style) */}
+          <div className="flex flex-col items-end gap-2">
+            <span className="text-xs font-bold text-[hsl(var(--battle-fg))]">
+              ROUND {currentIteration}/{maxIterations}
+            </span>
+            <PokeballIndicator
+              total={Math.min(maxIterations, 6)}
+              filled={Math.min(currentIteration, 6)}
+              size="md"
+              variant={stage === "completed" ? "success" : stage === "failed" ? "error" : "default"}
+            />
+            {maxIterations > 6 && (
+              <span className="text-xs text-[hsl(var(--battle-fg))] opacity-60">
+                +{maxIterations - 6} more
               </span>
-              <span>{Math.round(progressPercentage)}%</span>
-            </div>
-            <ProgressBar value={progressPercentage} />
+            )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+
+        {/* HP-style progress bar */}
+        <div className="mt-4">
+          <div className="flex items-center gap-2 text-xs font-bold text-[hsl(var(--battle-fg))] mb-1">
+            <span>PROGRESS</span>
+            <span>{Math.round(progressPercentage)}%</span>
+          </div>
+          <div className="battle-hp-bar">
+            <div 
+              className={`battle-hp-bar-fill ${progressPercentage < 25 ? 'danger' : progressPercentage < 50 ? 'warning' : ''}`}
+              style={{ width: `${progressPercentage}%` }}
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Success message */}
       {stage === "completed" && (
@@ -623,23 +628,20 @@ export function Battle() {
 
       {/* HITL approval message */}
       {stage === "awaiting_approval" && (
-        <Card className="border-[hsl(var(--warning))] bg-[hsl(var(--warning)/0.1)]">
-          <CardContent className="py-6 text-center">
-            <Pause className="mx-auto mb-4 h-8 w-8 text-[hsl(var(--warning))]" />
-            <h4 className="text-lg font-semibold">Review Required</h4>
-            <p className="mt-2 text-[hsl(var(--muted-foreground))]">
-              Iteration {currentIteration} complete. Review the changes and
-              approve to continue, or cancel the battle.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="battle-dialog py-4 text-center">
+          <Pause className="mx-auto mb-3 h-8 w-8 text-[hsl(var(--battle-fg))]" />
+          <h4 className="font-bold text-[hsl(var(--battle-fg))]">What will TRAINER do?</h4>
+          <p className="mt-2 text-[hsl(var(--battle-fg))] opacity-70">
+            Round {currentIteration} complete. Review changes and choose your next move.
+          </p>
+        </div>
       )}
 
       {/* Control buttons */}
       <div className="flex justify-end gap-2">
         {stage === "completed" ? null : stage === "failed" ? (
           <>
-            <Button onClick={handleStartBattle} disabled={isActionLoading}>
+            <Button variant="battle" onClick={handleStartBattle} disabled={isActionLoading}>
               {isActionLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -648,28 +650,28 @@ export function Battle() {
               ) : (
                 <>
                   <RotateCcw className="mr-2 h-4 w-4" />
-                  Retry Battle
+                  Retry
                 </>
               )}
             </Button>
-            <Button variant="outline" asChild>
+            <Button variant="battle" asChild>
               <Link to="/">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Dashboard
+                Back
               </Link>
             </Button>
           </>
         ) : stage === "awaiting_approval" ? (
           <>
             <Button
-              variant="destructive"
+              variant="battle"
               onClick={handleCancel}
               disabled={isActionLoading}
             >
-              Cancel Battle
+              Cancel
             </Button>
             <Button
-              variant="success"
+              variant="battle"
               onClick={handleApprove}
               disabled={isActionLoading}
             >
@@ -681,7 +683,7 @@ export function Battle() {
               ) : (
                 <>
                   <Check className="mr-2 h-4 w-4" />
-                  Approve & Continue
+                  Approve
                 </>
               )}
             </Button>
@@ -689,13 +691,13 @@ export function Battle() {
         ) : stage === "paused" ? (
           <>
             <Button
-              variant="destructive"
+              variant="battle"
               onClick={handleCancel}
               disabled={isActionLoading}
             >
-              Cancel Battle
+              Cancel
             </Button>
-            <Button onClick={handleResume} disabled={isActionLoading}>
+            <Button variant="battle" onClick={handleResume} disabled={isActionLoading}>
               {isActionLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -704,7 +706,7 @@ export function Battle() {
               ) : (
                 <>
                   <Play className="mr-2 h-4 w-4" />
-                  Resume Battle
+                  Resume
                 </>
               )}
             </Button>
@@ -712,14 +714,14 @@ export function Battle() {
         ) : stage === "running" ? (
           <>
             <Button
-              variant="destructive"
+              variant="battle"
               onClick={handleCancel}
               disabled={isActionLoading}
             >
               Cancel
             </Button>
             <Button
-              variant="outline"
+              variant="battle"
               onClick={handlePause}
               disabled={isActionLoading}
             >
@@ -728,13 +730,13 @@ export function Battle() {
           </>
         ) : (
           <>
-            <Button variant="outline" asChild>
+            <Button variant="battle" asChild>
               <Link to="/">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Dashboard
+                Back
               </Link>
             </Button>
-            <Button onClick={handleStartBattle} disabled={isActionLoading}>
+            <Button variant="battle" onClick={handleStartBattle} disabled={isActionLoading}>
               {isActionLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -743,7 +745,7 @@ export function Battle() {
               ) : (
                 <>
                   <Play className="mr-2 h-4 w-4" />
-                  Start Battle
+                  Fight!
                 </>
               )}
             </Button>
@@ -753,17 +755,15 @@ export function Battle() {
 
       {/* Loading overlay during running */}
       {stage === "running" && (
-        <Card className="border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.05)]">
-          <CardContent className="flex items-center justify-center gap-4 py-6">
-            <div className="relative">
-              <div className="h-8 w-8 animate-ping rounded-full bg-[hsl(var(--primary)/0.3)]" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="h-4 w-4 rounded-full bg-[hsl(var(--primary))]" />
-              </div>
+        <div className="battle-dialog py-4 flex items-center justify-center gap-4">
+          <div className="relative">
+            <div className="h-6 w-6 animate-ping rounded-full bg-[hsl(72_85%_50%)]" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-3 w-3 rounded-full bg-[hsl(72_85%_60%)]" />
             </div>
-            <span className="text-lg font-medium">Claude is working...</span>
-          </CardContent>
-        </Card>
+          </div>
+          <span className="font-bold text-[hsl(var(--battle-fg))]">CLAUDE used IMPLEMENT!</span>
+        </div>
       )}
     </div>
   );

@@ -39,10 +39,10 @@ export function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
 
   return (
     <>
-      <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 lg:px-6">
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-4 shell-plastic border-b-4 border-[hsl(var(--shell-darker))] px-4 lg:px-6 shadow-[0_4px_8px_rgba(0,0,0,0.15)]">
         <div className="flex items-center gap-4">
           <Button
-            variant="ghost"
+            variant="shell"
             size="icon"
             onClick={onMenuClick}
             aria-label={sidebarOpen ? "Close menu" : "Open menu"}
@@ -50,29 +50,26 @@ export function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
           >
             <Menu className="h-5 w-5" />
           </Button>
-          <h1 className="text-lg font-semibold">{projectName}</h1>
+          <h1 className="text-lg font-semibold text-[hsl(var(--shell-fg))]">{projectName}</h1>
         </div>
 
         <div className="flex items-center gap-3">
           <RepoSelector />
 
+          {/* LED-style connection indicator */}
           <Tooltip>
             <TooltipTrigger asChild>
-              <div
-                className={cn(
-                  "flex items-center gap-1.5 rounded-full px-2 py-1 text-xs",
-                  isConnected
-                    ? "bg-[hsl(var(--success)/0.1)] text-[hsl(var(--success))]"
-                    : "bg-[hsl(var(--destructive)/0.1)] text-[hsl(var(--destructive))]"
-                )}
-              >
-                {isConnected ? (
-                  <Wifi className="h-3 w-3" />
-                ) : (
-                  <WifiOff className="h-3 w-3" />
-                )}
-                <span className="hidden sm:inline">
-                  {isConnected ? "Connected" : "Offline"}
+              <div className="flex items-center gap-2 px-2 py-1">
+                <div
+                  className={cn(
+                    "w-3 h-3 rounded-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.3)]",
+                    isConnected
+                      ? "bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]"
+                      : "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.6)]"
+                  )}
+                />
+                <span className="hidden sm:inline text-xs text-[hsl(var(--shell-fg))]">
+                  {isConnected ? "Online" : "Offline"}
                 </span>
               </div>
             </TooltipTrigger>
@@ -83,7 +80,7 @@ export function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
 
           <Badge
             variant={mode === "hitl" ? "secondary" : "warning"}
-            className="text-xs"
+            className="text-xs rounded-md"
           >
             {mode === "hitl" ? "HITL" : "YOLO"}
           </Badge>
@@ -91,7 +88,7 @@ export function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="shell"
                 size="icon"
                 onClick={() => setConfigOpen(true)}
                 aria-label="Settings"

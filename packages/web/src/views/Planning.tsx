@@ -69,37 +69,41 @@ function IdeaInput({ onSubmit, isLoading }: IdeaInputProps) {
   return (
     <div className="mx-auto max-w-2xl space-y-4 sm:space-y-6">
       <div className="text-center">
-        <h2 className="text-lg font-bold sm:text-2xl">Describe Your Idea</h2>
-        <p className="mt-2 text-sm text-[hsl(var(--muted-foreground))] sm:text-base">
+        <h2 className="text-lg font-bold sm:text-2xl text-[hsl(var(--screen-fg))]">Describe Your Idea</h2>
+        <p className="mt-2 text-sm text-[hsl(var(--screen-muted-fg))] sm:text-base">
           Tell Claude about your project idea. Be as detailed as you like -
           Claude will help refine it into a structured plan with actionable
           tasks.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <Textarea
-          value={idea}
-          onChange={(e) => setIdea(e.target.value)}
-          placeholder="I want to build an app that..."
-          rows={8}
-          disabled={isLoading}
-          className="resize-none"
-        />
+      <Card>
+        <CardContent className="p-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <Textarea
+              value={idea}
+              onChange={(e) => setIdea(e.target.value)}
+              placeholder="I want to build an app that..."
+              rows={8}
+              disabled={isLoading}
+              className="resize-none bg-[hsl(var(--screen-card))] border-[hsl(var(--screen-border))]"
+            />
 
-        <div className="flex justify-end">
-          <Button type="submit" disabled={!idea.trim() || isLoading} size="lg">
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Starting...
-              </>
-            ) : (
-              "Start Planning"
-            )}
-          </Button>
-        </div>
-      </form>
+            <div className="flex justify-end">
+              <Button type="submit" disabled={!idea.trim() || isLoading} size="lg">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Starting...
+                  </>
+                ) : (
+                  "Start Planning"
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

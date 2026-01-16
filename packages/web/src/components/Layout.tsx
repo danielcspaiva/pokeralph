@@ -88,11 +88,17 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <TooltipProvider>
-      <div className="flex min-h-screen bg-[hsl(var(--background))]">
+      <div className="flex min-h-screen bg-[hsl(var(--shell-bg))]">
         <Sidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />
         <div className="flex flex-1 flex-col">
           <Header onMenuClick={toggleSidebar} sidebarOpen={sidebarOpen} />
-          <main className="flex-1 overflow-auto p-6">{children}</main>
+          {/* Screen bezel - recessed area */}
+          <div className="flex-1 m-3 mt-0 p-2 rounded-lg bg-[hsl(var(--shell-darker))] shadow-[inset_0_2px_6px_rgba(0,0,0,0.4)]">
+            {/* Screen area - main content */}
+            <main className="h-full overflow-auto rounded screen-area p-6">
+              {children}
+            </main>
+          </div>
         </div>
       </div>
     </TooltipProvider>

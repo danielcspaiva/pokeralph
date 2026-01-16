@@ -41,10 +41,10 @@ const filterConfigs: Record<TaskFilter, FilterConfig> = {
   all: { label: "All", filter: () => true },
   pending: { label: "Pending", filter: (t) => t.status === "pending" },
   in_progress: {
-    label: "In Progress",
+    label: "Active",
     filter: (t) => t.status === "in_progress",
   },
-  completed: { label: "Completed", filter: (t) => t.status === "completed" },
+  completed: { label: "Done", filter: (t) => t.status === "completed" },
   failed: { label: "Failed", filter: (t) => t.status === "failed" },
 };
 
@@ -59,21 +59,19 @@ interface StatCardProps {
 
 function StatCard({ label, value, variant = "default" }: StatCardProps) {
   const colorClass = {
-    default: "text-[hsl(var(--foreground))]",
+    default: "text-[hsl(var(--screen-fg))]",
     success: "text-[hsl(var(--success))]",
-    warning: "text-[hsl(var(--warning))]",
+    warning: "text-[hsl(var(--primary))]",
     error: "text-[hsl(var(--destructive))]",
   }[variant];
 
   return (
-    <Card>
-      <CardContent className="flex flex-col items-center justify-center p-4">
-        <span className={cn("text-3xl font-bold", colorClass)}>{value}</span>
-        <span className="text-sm text-[hsl(var(--muted-foreground))]">
-          {label}
-        </span>
-      </CardContent>
-    </Card>
+    <div className="bg-[hsl(var(--screen-card))] border border-[hsl(var(--screen-border))] rounded-lg p-4 text-center shadow-sm">
+      <span className={cn("text-2xl font-bold block", colorClass)}>{value}</span>
+      <span className="text-xs text-[hsl(var(--screen-muted-fg))]">
+        {label}
+      </span>
+    </div>
   );
 }
 
@@ -86,40 +84,52 @@ interface TaskListItemProps {
 
 function TaskListItem({ task }: TaskListItemProps) {
   const statusToBadgeVariant: Record<string, string> = {
-    pending: "pending",
-    planning: "planning",
-    in_progress: "in_progress",
-    paused: "paused",
-    completed: "completed",
-    failed: "failed",
+    pending: "secondary",
+    planning: "secondary",
+    in_progress: "default",
+    paused: "warning",
+    completed: "success",
+    failed: "destructive",
   };
-  const statusVariant = statusToBadgeVariant[task.status] ?? "pending";
-  const dotClassMap: Record<string, string> = {
-    pending: "bg-[hsl(var(--muted-foreground))]",
-    planning: "bg-blue-500",
-    in_progress: "bg-[hsl(var(--warning))]",
-    paused: "bg-orange-500",
+  const statusVariant = statusToBadgeVariant[task.status] ?? "secondary";
+  
+  // Status indicator colors
+  const statusColorMap: Record<string, string> = {
+    pending: "bg-[hsl(var(--screen-muted))]",
+    planning: "bg-blue-400",
+    in_progress: "bg-[hsl(var(--primary))]",
+    paused: "bg-[hsl(var(--warning))]",
     completed: "bg-[hsl(var(--success))]",
     failed: "bg-[hsl(var(--destructive))]",
   };
-  const dotClass = dotClassMap[task.status] || "bg-[hsl(var(--muted-foreground))]";
+  const statusColor = statusColorMap[task.status] || statusColorMap.pending;
+
+  const statusLabels: Record<string, string> = {
+    pending: "Pending",
+    planning: "Planning",
+    in_progress: "Active",
+    paused: "Paused",
+    completed: "Done",
+    failed: "Failed",
+  };
 
   return (
     <Link
       to={`/task/${task.id}`}
-      className="flex items-center justify-between rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 transition-colors hover:bg-[hsl(var(--accent))]"
+      className="flex items-center justify-between bg-[hsl(var(--screen-card))] border border-[hsl(var(--screen-border))] rounded-lg p-4 hover:shadow-md transition-shadow"
     >
       <div className="flex items-center gap-3">
-        <span className={cn("h-2 w-2 rounded-full", dotClass)} />
+        {/* Status indicator */}
+        <div className={cn("w-3 h-3 rounded-full", statusColor)} />
         <div>
-          <span className="mr-2 text-sm text-[hsl(var(--muted-foreground))]">
+          <span className="mr-2 text-xs text-[hsl(var(--screen-muted-fg))]">
             #{task.priority}
           </span>
-          <span className="font-medium">{task.title}</span>
+          <span className="font-bold text-sm text-[hsl(var(--screen-fg))]">{task.title}</span>
         </div>
       </div>
-      <Badge variant={statusVariant as "pending" | "planning" | "in_progress" | "paused" | "completed" | "failed"}>
-        {task.status.replace("_", " ")}
+      <Badge variant={statusVariant as "default" | "secondary" | "success" | "warning" | "destructive"}>
+        {statusLabels[task.status] || task.status}
       </Badge>
     </Link>
   );
@@ -130,22 +140,23 @@ function TaskListItem({ task }: TaskListItemProps) {
  */
 function EmptyState() {
   return (
-    <div className="flex flex-col items-center justify-center px-4 py-8 sm:py-16">
-      <div className="mb-4 bg-[hsl(var(--muted))] p-4 sm:mb-6 sm:p-6">
-        <ClipboardList className="h-8 w-8 text-[hsl(var(--muted-foreground))] sm:h-12 sm:w-12" />
-      </div>
-      <h2 className="mb-2 text-center text-lg font-semibold sm:text-2xl">No Project Yet</h2>
-      <p className="mb-4 max-w-md text-center text-sm text-[hsl(var(--muted-foreground))] sm:mb-6 sm:text-base">
-        Start by describing your idea and Claude will help you create a plan
-        with actionable tasks.
-      </p>
-      <Button asChild size="lg">
-        <Link to="/planning">
-          <Plus className="mr-2 h-4 w-4 sm:h-5 sm:w-5" />
-          <span className="text-xs sm:text-sm">Start Planning</span>
-        </Link>
-      </Button>
-    </div>
+    <Card className="max-w-lg mx-auto">
+      <CardContent className="text-center py-12 px-6">
+        <div className="mb-4 inline-flex items-center justify-center w-16 h-16 rounded-full bg-[hsl(var(--screen-muted))]">
+          <ClipboardList className="h-8 w-8 text-[hsl(var(--screen-muted-fg))]" />
+        </div>
+        <h2 className="mb-3 text-lg font-bold text-[hsl(var(--screen-fg))]">No tasks yet</h2>
+        <p className="mb-6 text-[hsl(var(--screen-muted-fg))]">
+          Create a PRD to get started with your project.
+        </p>
+        <Button asChild size="lg">
+          <Link to="/planning">
+            <Plus className="mr-2 h-4 w-4" />
+            Create PRD
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -217,51 +228,55 @@ export function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Project header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{prd.name}</h1>
-          {prd.description && (
-            <p className="mt-1 text-[hsl(var(--muted-foreground))]">
-              {prd.description}
-            </p>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" asChild>
-            <Link to="/planning">
-              <Plus className="mr-2 h-4 w-4" />
-              New Idea
-            </Link>
-          </Button>
-          <Button
-            onClick={handleStartBattle}
-            disabled={!nextTask || isBattleRunning || isStartingBattle}
-          >
-            {isStartingBattle ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Starting...
-              </>
-            ) : isBattleRunning ? (
-              "Battle in Progress"
-            ) : nextTask ? (
-              <>
-                <Play className="mr-2 h-4 w-4" />
-                Start Next Battle
-              </>
-            ) : (
-              "No Tasks Pending"
-            )}
-          </Button>
-        </div>
-      </div>
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-lg font-bold text-[hsl(var(--screen-fg))]">{prd.name}</h1>
+              {prd.description && (
+                <p className="mt-1 text-sm text-[hsl(var(--screen-muted-fg))]">
+                  {prd.description}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" asChild>
+                <Link to="/planning">
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Task
+                </Link>
+              </Button>
+              <Button
+                onClick={handleStartBattle}
+                disabled={!nextTask || isBattleRunning || isStartingBattle}
+              >
+                {isStartingBattle ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Starting...
+                  </>
+                ) : isBattleRunning ? (
+                  "Running..."
+                ) : nextTask ? (
+                  <>
+                    <Play className="mr-2 h-4 w-4" />
+                    Start Task
+                  </>
+                ) : (
+                  "No Tasks"
+                )}
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <StatCard label="Total" value={counts.total} />
         <StatCard label="Pending" value={counts.pending} />
-        <StatCard label="In Progress" value={counts.in_progress} variant="warning" />
-        <StatCard label="Completed" value={counts.completed} variant="success" />
+        <StatCard label="Active" value={counts.in_progress} variant="warning" />
+        <StatCard label="Done" value={counts.completed} variant="success" />
         <StatCard label="Failed" value={counts.failed} variant="error" />
       </div>
 
@@ -296,9 +311,8 @@ export function Dashboard() {
           filteredTasks.map((task) => <TaskListItem key={task.id} task={task} />)
         ) : (
           <Card>
-            <CardContent className="py-8 text-center text-[hsl(var(--muted-foreground))]">
-              No {activeFilter === "all" ? "" : activeFilter.replace("_", " ")}{" "}
-              tasks found.
+            <CardContent className="py-8 text-center text-[hsl(var(--screen-muted-fg))]">
+              No {activeFilter === "all" ? "tasks" : filterConfigs[activeFilter].label.toLowerCase()} found.
             </CardContent>
           </Card>
         )}
