@@ -7,12 +7,13 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { Check, Loader2, Send, X } from "lucide-react";
 import {
   usePlanningState,
   usePendingQuestion,
   usePlanningOutput,
   useAppStore,
-} from "@/stores/app-store.ts";
+} from "@/stores/app-store";
 import {
   startPlanning,
   answerPlanningQuestion,
@@ -20,9 +21,18 @@ import {
   resetPlanning,
   updatePRD,
   getPlanningStatus,
-} from "@/api/client.ts";
+} from "@/api/client";
 import type { PRD, Task } from "@pokeralph/core/types";
-import styles from "./Planning.module.css";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 /**
  * View stages for the planning workflow
@@ -57,40 +67,37 @@ function IdeaInput({ onSubmit, isLoading }: IdeaInputProps) {
   };
 
   return (
-    <div className={styles.inputStage}>
-      <div className={styles.inputHeader}>
-        <h2 className={styles.stageTitle}>Describe Your Idea</h2>
-        <p className={styles.stageDescription}>
-          Tell Claude about your project idea. Be as detailed as you like - Claude will
-          help refine it into a structured plan with actionable tasks.
+    <div className="mx-auto max-w-2xl space-y-6">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold">Describe Your Idea</h2>
+        <p className="mt-2 text-[hsl(var(--muted-foreground))]">
+          Tell Claude about your project idea. Be as detailed as you like -
+          Claude will help refine it into a structured plan with actionable
+          tasks.
         </p>
       </div>
 
-      <form onSubmit={handleSubmit} className={styles.ideaForm}>
-        <textarea
-          className={styles.ideaTextarea}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Textarea
           value={idea}
           onChange={(e) => setIdea(e.target.value)}
           placeholder="I want to build an app that..."
           rows={8}
           disabled={isLoading}
+          className="resize-none"
         />
 
-        <div className={styles.inputActions}>
-          <button
-            type="submit"
-            className={styles.primaryButton}
-            disabled={!idea.trim() || isLoading}
-          >
+        <div className="flex justify-end">
+          <Button type="submit" disabled={!idea.trim() || isLoading} size="lg">
             {isLoading ? (
               <>
-                <span className={styles.spinner} />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Starting...
               </>
             ) : (
               "Start Planning"
             )}
-          </button>
+          </Button>
         </div>
       </form>
     </div>
@@ -137,93 +144,96 @@ function Conversation({
   };
 
   return (
-    <div className={styles.conversationStage}>
-      <div className={styles.conversationHeader}>
-        <h2 className={styles.stageTitle}>Planning with Claude</h2>
-        <div className={styles.conversationActions}>
-          <button
-            type="button"
-            className={styles.secondaryButton}
-            onClick={onCancel}
-            disabled={isProcessing}
-          >
+    <div className="flex h-[calc(100vh-12rem)] flex-col">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-bold">Planning with Claude</h2>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={onCancel} disabled={isProcessing}>
             Cancel
-          </button>
-          <button
-            type="button"
-            className={styles.primaryButton}
+          </Button>
+          <Button
             onClick={onFinish}
             disabled={isProcessing || isWaitingInput}
           >
-            {isProcessing ? "Processing..." : "Finish Planning"}
-          </button>
+            {isProcessing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              "Finish Planning"
+            )}
+          </Button>
         </div>
       </div>
 
-      <div className={styles.chatArea}>
-        <div className={styles.messages}>
+      <ScrollArea className="flex-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] p-4">
+        <div className="space-y-4">
           {messages.map((msg, idx) => (
             <div
               key={`${msg.type}-${idx}`}
-              className={`${styles.message} ${styles[msg.type]}`}
+              className={cn(
+                "flex",
+                msg.type === "user" ? "justify-end" : "justify-start"
+              )}
             >
-              <div className={styles.messageHeader}>
-                <span className={styles.messageSender}>
-                  {msg.type === "claude" ? "Claude" : "You"}
-                </span>
-                <span className={styles.messageTime}>
-                  {msg.timestamp.toLocaleTimeString()}
-                </span>
-              </div>
-              <div className={styles.messageContent}>
-                {msg.content.split("\n").map((line, lineIdx) => (
-                  <p key={`${msg.timestamp.getTime()}-line-${lineIdx}`}>{line || "\u00A0"}</p>
-                ))}
+              <div
+                className={cn(
+                  "max-w-[80%] rounded-lg px-4 py-2",
+                  msg.type === "user"
+                    ? "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]"
+                    : "bg-[hsl(var(--card))] border border-[hsl(var(--border))]"
+                )}
+              >
+                <div className="mb-1 flex items-center gap-2 text-xs opacity-70">
+                  <span>{msg.type === "claude" ? "Claude" : "You"}</span>
+                  <span>{msg.timestamp.toLocaleTimeString()}</span>
+                </div>
+                <div className="whitespace-pre-wrap">{msg.content}</div>
               </div>
             </div>
           ))}
 
           {isProcessing && !isWaitingInput && (
-            <div className={`${styles.message} ${styles.claude}`}>
-              <div className={styles.messageHeader}>
-                <span className={styles.messageSender}>Claude</span>
-              </div>
-              <div className={styles.messageContent}>
-                <span className={styles.typingIndicator}>
-                  <span />
-                  <span />
-                  <span />
-                </span>
+            <div className="flex justify-start">
+              <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-2">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm text-[hsl(var(--muted-foreground))]">
+                    Claude is thinking...
+                  </span>
+                </div>
               </div>
             </div>
           )}
 
           <div ref={messagesEndRef} />
         </div>
+      </ScrollArea>
 
-        {isWaitingInput && pendingQuestion && (
-          <div className={styles.questionBox}>
-            <p className={styles.questionText}>{pendingQuestion}</p>
-            <form onSubmit={handleSendAnswer} className={styles.answerForm}>
-              <input
-                type="text"
-                className={styles.answerInput}
+      {isWaitingInput && pendingQuestion && (
+        <Card className="mt-4">
+          <CardContent className="p-4">
+            <p className="mb-3 font-medium">{pendingQuestion}</p>
+            <form onSubmit={handleSendAnswer} className="flex gap-2">
+              <Input
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
                 placeholder="Type your answer..."
                 disabled={isProcessing}
+                className="flex-1"
               />
-              <button
+              <Button
                 type="submit"
-                className={styles.sendButton}
                 disabled={!answer.trim() || isProcessing}
+                size="icon"
               >
-                Send
-              </button>
+                <Send className="h-4 w-4" />
+              </Button>
             </form>
-          </div>
-        )}
-      </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
@@ -241,7 +251,6 @@ interface ReviewProps {
 
 function Review({ prd, onEdit, onConfirm, onBack, isLoading }: ReviewProps) {
   const [editedPRD, setEditedPRD] = useState(prd);
-  const [activeTab, setActiveTab] = useState<"overview" | "tasks">("overview");
 
   const handleNameChange = (name: string) => {
     const updated = { ...editedPRD, name };
@@ -255,7 +264,11 @@ function Review({ prd, onEdit, onConfirm, onBack, isLoading }: ReviewProps) {
     onEdit(updated);
   };
 
-  const handleTaskEdit = (taskId: string, field: keyof Task, value: string | number) => {
+  const handleTaskEdit = (
+    taskId: string,
+    field: keyof Task,
+    value: string | number
+  ) => {
     const updated = {
       ...editedPRD,
       tasks: editedPRD.tasks.map((task) =>
@@ -267,146 +280,211 @@ function Review({ prd, onEdit, onConfirm, onBack, isLoading }: ReviewProps) {
   };
 
   return (
-    <div className={styles.reviewStage}>
-      <div className={styles.reviewHeader}>
-        <h2 className={styles.stageTitle}>Review Your PRD</h2>
-        <p className={styles.stageDescription}>
-          Review and edit the generated PRD before confirming. You can modify the project
-          name, description, and individual tasks.
+    <div className="space-y-6">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold">Review Your PRD</h2>
+        <p className="mt-2 text-[hsl(var(--muted-foreground))]">
+          Review and edit the generated PRD before confirming. You can modify
+          the project name, description, and individual tasks.
         </p>
       </div>
 
-      <div className={styles.tabs}>
-        <button
-          type="button"
-          className={`${styles.tab} ${activeTab === "overview" ? styles.active : ""}`}
-          onClick={() => setActiveTab("overview")}
-        >
-          Overview
-        </button>
-        <button
-          type="button"
-          className={`${styles.tab} ${activeTab === "tasks" ? styles.active : ""}`}
-          onClick={() => setActiveTab("tasks")}
-        >
-          Tasks ({editedPRD.tasks.length})
-        </button>
-      </div>
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="w-full justify-start">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="tasks">Tasks ({editedPRD.tasks.length})</TabsTrigger>
+        </TabsList>
 
-      {activeTab === "overview" && (
-        <div className={styles.overviewTab}>
-          <div className={styles.formGroup}>
-            <label htmlFor="prd-name" className={styles.label}>
-              Project Name
-            </label>
-            <input
+        <TabsContent value="overview" className="mt-4 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="prd-name">Project Name</Label>
+            <Input
               id="prd-name"
-              type="text"
-              className={styles.input}
               value={editedPRD.name}
               onChange={(e) => handleNameChange(e.target.value)}
             />
           </div>
 
-          <div className={styles.formGroup}>
-            <label htmlFor="prd-description" className={styles.label}>
-              Description
-            </label>
-            <textarea
+          <div className="space-y-2">
+            <Label htmlFor="prd-description">Description</Label>
+            <Textarea
               id="prd-description"
-              className={styles.textarea}
               value={editedPRD.description}
               onChange={(e) => handleDescriptionChange(e.target.value)}
               rows={4}
             />
           </div>
 
-          <div className={styles.prdStats}>
-            <div className={styles.stat}>
-              <span className={styles.statValue}>{editedPRD.tasks.length}</span>
-              <span className={styles.statLabel}>Tasks</span>
-            </div>
-          </div>
-        </div>
-      )}
+          <Card>
+            <CardContent className="flex items-center justify-center p-8">
+              <div className="text-center">
+                <span className="text-4xl font-bold">
+                  {editedPRD.tasks.length}
+                </span>
+                <p className="text-[hsl(var(--muted-foreground))]">Tasks</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {activeTab === "tasks" && (
-        <div className={styles.tasksTab}>
+        <TabsContent value="tasks" className="mt-4">
           {editedPRD.tasks.length === 0 ? (
-            <div className={styles.noTasks}>
-              <p>No tasks were generated. Go back and provide more details.</p>
-            </div>
+            <Card>
+              <CardContent className="py-8 text-center text-[hsl(var(--muted-foreground))]">
+                No tasks were generated. Go back and provide more details.
+              </CardContent>
+            </Card>
           ) : (
-            <div className={styles.tasksList}>
+            <div className="space-y-4">
               {editedPRD.tasks.map((task, idx) => (
-                <div key={task.id} className={styles.taskCard}>
-                  <div className={styles.taskHeader}>
-                    <span className={styles.taskNumber}>#{idx + 1}</span>
-                    <input
-                      type="text"
-                      className={styles.taskTitleInput}
-                      value={task.title}
-                      onChange={(e) => handleTaskEdit(task.id, "title", e.target.value)}
-                    />
-                    <input
-                      type="number"
-                      className={styles.taskPriorityInput}
-                      value={task.priority}
-                      onChange={(e) =>
-                        handleTaskEdit(task.id, "priority", Number.parseInt(e.target.value, 10))
-                      }
-                      min={1}
-                      title="Priority"
-                    />
-                  </div>
-                  <textarea
-                    className={styles.taskDescription}
-                    value={task.description}
-                    onChange={(e) => handleTaskEdit(task.id, "description", e.target.value)}
-                    rows={2}
-                  />
-                  {task.acceptanceCriteria.length > 0 && (
-                    <div className={styles.acceptanceCriteria}>
-                      <span className={styles.criteriaLabel}>Acceptance Criteria:</span>
-                      <ul className={styles.criteriaList}>
-                        {task.acceptanceCriteria.map((criterion, criterionIdx) => (
-                          <li key={`${task.id}-criterion-${criterionIdx}`}>{criterion}</li>
-                        ))}
-                      </ul>
+                <Card key={task.id}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">#{idx + 1}</Badge>
+                      <Input
+                        value={task.title}
+                        onChange={(e) =>
+                          handleTaskEdit(task.id, "title", e.target.value)
+                        }
+                        className="flex-1 font-medium"
+                      />
+                      <Input
+                        type="number"
+                        value={task.priority}
+                        onChange={(e) =>
+                          handleTaskEdit(
+                            task.id,
+                            "priority",
+                            Number.parseInt(e.target.value, 10)
+                          )
+                        }
+                        min={1}
+                        className="w-20"
+                        title="Priority"
+                      />
                     </div>
-                  )}
-                </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <Textarea
+                      value={task.description}
+                      onChange={(e) =>
+                        handleTaskEdit(task.id, "description", e.target.value)
+                      }
+                      rows={2}
+                    />
+                    {task.acceptanceCriteria.length > 0 && (
+                      <div>
+                        <span className="text-sm font-medium text-[hsl(var(--muted-foreground))]">
+                          Acceptance Criteria:
+                        </span>
+                        <ul className="mt-1 list-inside list-disc text-sm">
+                          {task.acceptanceCriteria.map((criterion, criterionIdx) => (
+                            <li key={`${task.id}-criterion-${criterionIdx}`}>
+                              {criterion}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               ))}
             </div>
           )}
-        </div>
-      )}
+        </TabsContent>
+      </Tabs>
 
-      <div className={styles.reviewActions}>
-        <button
-          type="button"
-          className={styles.secondaryButton}
-          onClick={onBack}
-          disabled={isLoading}
-        >
+      <Separator />
+
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={onBack} disabled={isLoading}>
           Back
-        </button>
-        <button
-          type="button"
-          className={styles.primaryButton}
+        </Button>
+        <Button
           onClick={onConfirm}
           disabled={isLoading || editedPRD.tasks.length === 0}
         >
           {isLoading ? (
             <>
-              <span className={styles.spinner} />
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Saving...
             </>
           ) : (
-            "Confirm & Start"
+            <>
+              <Check className="mr-2 h-4 w-4" />
+              Confirm & Start
+            </>
           )}
-        </button>
+        </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Progress steps component
+ */
+interface ProgressStepsProps {
+  stage: PlanningStage;
+}
+
+function ProgressSteps({ stage }: ProgressStepsProps) {
+  const steps = [
+    { id: "input", label: "Describe Idea" },
+    { id: "conversation", label: "Plan with Claude" },
+    { id: "review", label: "Review & Confirm" },
+  ];
+
+  const getStepStatus = (stepId: string) => {
+    const stageOrder = ["input", "conversation", "review", "confirm"];
+    const currentIndex = stageOrder.indexOf(stage);
+    const stepIndex = stageOrder.indexOf(stepId);
+
+    if (stepIndex < currentIndex) return "completed";
+    if (stepIndex === currentIndex || (stage === "confirm" && stepId === "review"))
+      return "active";
+    return "pending";
+  };
+
+  return (
+    <div className="mb-8 flex items-center justify-center gap-4">
+      {steps.map((step, idx) => {
+        const status = getStepStatus(step.id);
+        return (
+          <div key={step.id} className="flex items-center gap-2">
+            <div
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium",
+                status === "completed" &&
+                  "bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]",
+                status === "active" &&
+                  "bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]",
+                status === "pending" &&
+                  "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"
+              )}
+            >
+              {status === "completed" ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                idx + 1
+              )}
+            </div>
+            <span
+              className={cn(
+                "text-sm font-medium",
+                status === "active"
+                  ? "text-[hsl(var(--foreground))]"
+                  : "text-[hsl(var(--muted-foreground))]"
+              )}
+            >
+              {step.label}
+            </span>
+            {idx < steps.length - 1 && (
+              <div className="mx-2 h-px w-12 bg-[hsl(var(--border))]" />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -435,18 +513,11 @@ export function Planning() {
 
   // Sync planning output with messages
   useEffect(() => {
-    console.log("[PokéRalph][Planning] planningOutput changed", {
-      length: planningOutput.length,
-      outputs: planningOutput.map((o) => `${o.substring(0, 50)}...`),
-    });
-
     if (planningOutput.length === 0) return;
 
-    // Process any outputs we haven't seen yet
     const newMessages: ChatMessage[] = [];
     for (const output of planningOutput) {
       if (!output) continue;
-      // Use a hash of the output to track uniqueness
       const outputKey = output.substring(0, 200);
       if (!processedOutputsRef.current.has(outputKey)) {
         processedOutputsRef.current.add(outputKey);
@@ -454,9 +525,6 @@ export function Planning() {
           type: "claude" as const,
           content: output,
           timestamp: new Date(),
-        });
-        console.log("[PokéRalph][Planning] Adding new Claude message", {
-          preview: `${output.substring(0, 100)}...`,
         });
       }
     }
@@ -491,21 +559,18 @@ export function Planning() {
     setIsLoading(true);
     setError(null);
 
-    // Add user message BEFORE API call to avoid race condition with WebSocket responses
     setMessages([{ type: "user", content: idea, timestamp: new Date() }]);
-    processedOutputsRef.current.clear(); // Reset for new session
+    processedOutputsRef.current.clear();
 
-    // Move to conversation stage immediately for better UX
     setStage("conversation");
     setPlanningState("planning");
 
     try {
       await startPlanning(idea);
-      // Note: Claude's response will arrive via WebSocket and be handled by useEffect
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to start planning";
+      const message =
+        err instanceof Error ? err.message : "Failed to start planning";
       setError(message);
-      // Reset to input stage on error
       setStage("input");
       setMessages([]);
       setPlanningState("idle");
@@ -520,13 +585,16 @@ export function Planning() {
     setError(null);
 
     try {
-      // Add user message
-      setMessages((prev) => [...prev, { type: "user", content: answer, timestamp: new Date() }]);
+      setMessages((prev) => [
+        ...prev,
+        { type: "user", content: answer, timestamp: new Date() },
+      ]);
 
       await answerPlanningQuestion(answer);
       setPlanningState("planning");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to send answer";
+      const message =
+        err instanceof Error ? err.message : "Failed to send answer";
       setError(message);
     } finally {
       setIsLoading(false);
@@ -544,7 +612,8 @@ export function Planning() {
       setStage("review");
       setPlanningState("completed");
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to finish planning";
+      const message =
+        err instanceof Error ? err.message : "Failed to finish planning";
       setError(message);
     } finally {
       setIsLoading(false);
@@ -560,7 +629,7 @@ export function Planning() {
     }
     clearPlanningSession();
     setMessages([]);
-    processedOutputsRef.current.clear(); // Reset tracking for new session
+    processedOutputsRef.current.clear();
     setStage("input");
     setError(null);
   };
@@ -597,36 +666,23 @@ export function Planning() {
   };
 
   return (
-    <div className={styles.planning}>
-      {/* Progress indicator */}
-      <div className={styles.progress}>
-        <div className={`${styles.progressStep} ${stage === "input" ? styles.active : ""} ${stage !== "input" ? styles.completed : ""}`}>
-          <span className={styles.progressNumber}>1</span>
-          <span className={styles.progressLabel}>Describe Idea</span>
-        </div>
-        <div className={styles.progressLine} />
-        <div className={`${styles.progressStep} ${stage === "conversation" ? styles.active : ""} ${stage === "review" || stage === "confirm" ? styles.completed : ""}`}>
-          <span className={styles.progressNumber}>2</span>
-          <span className={styles.progressLabel}>Plan with Claude</span>
-        </div>
-        <div className={styles.progressLine} />
-        <div className={`${styles.progressStep} ${stage === "review" || stage === "confirm" ? styles.active : ""}`}>
-          <span className={styles.progressNumber}>3</span>
-          <span className={styles.progressLabel}>Review & Confirm</span>
-        </div>
-      </div>
+    <div>
+      <ProgressSteps stage={stage} />
 
-      {/* Error display */}
       {error && (
-        <div className={styles.error}>
+        <div className="mb-4 flex items-center justify-between rounded-md bg-[hsl(var(--destructive)/0.1)] p-3 text-[hsl(var(--destructive))]">
           <span>{error}</span>
-          <button type="button" onClick={() => setError(null)} className={styles.errorClose}>
-            &times;
-          </button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setError(null)}
+            className="h-6 w-6"
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </div>
       )}
 
-      {/* Stage content */}
       {stage === "input" && (
         <IdeaInput onSubmit={handleStartPlanning} isLoading={isLoading} />
       )}

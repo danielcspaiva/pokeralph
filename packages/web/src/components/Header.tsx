@@ -5,10 +5,18 @@
  */
 
 import { useState } from "react";
-import { usePRD, useConfig, useIsConnected } from "@/stores/app-store.ts";
-import { ConfigModal } from "./ConfigModal.tsx";
-import { RepoSelector } from "./RepoSelector.tsx";
-import styles from "./Header.module.css";
+import { Menu, Settings, Wifi, WifiOff } from "lucide-react";
+import { usePRD, useConfig, useIsConnected } from "@/stores/app-store";
+import { ConfigModal } from "./ConfigModal";
+import { RepoSelector } from "./RepoSelector";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 interface HeaderProps {
   /** Callback when menu button is clicked */
@@ -31,45 +39,68 @@ export function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
 
   return (
     <>
-      <header className={styles.header}>
-        <div className={styles.left}>
-          <button
-            type="button"
-            className={styles.menuButton}
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--background))] px-4 lg:px-6">
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={onMenuClick}
             aria-label={sidebarOpen ? "Close menu" : "Open menu"}
+            className="lg:hidden"
           >
-            <span className={styles.menuIcon}>☰</span>
-          </button>
-          <h1 className={styles.title}>{projectName}</h1>
+            <Menu className="h-5 w-5" />
+          </Button>
+          <h1 className="text-lg font-semibold">{projectName}</h1>
         </div>
 
-        <div className={styles.right}>
+        <div className="flex items-center gap-3">
           <RepoSelector />
 
-          <div
-            className={`${styles.connectionStatus} ${isConnected ? styles.connected : styles.disconnected}`}
-            title={isConnected ? "Connected to server" : "Disconnected"}
-          >
-            <span className={styles.connectionDot} />
-            <span className={styles.connectionText}>
-              {isConnected ? "Connected" : "Offline"}
-            </span>
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className={cn(
+                  "flex items-center gap-1.5 rounded-full px-2 py-1 text-xs",
+                  isConnected
+                    ? "bg-[hsl(var(--success)/0.1)] text-[hsl(var(--success))]"
+                    : "bg-[hsl(var(--destructive)/0.1)] text-[hsl(var(--destructive))]"
+                )}
+              >
+                {isConnected ? (
+                  <Wifi className="h-3 w-3" />
+                ) : (
+                  <WifiOff className="h-3 w-3" />
+                )}
+                <span className="hidden sm:inline">
+                  {isConnected ? "Connected" : "Offline"}
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              {isConnected ? "Connected to server" : "Disconnected from server"}
+            </TooltipContent>
+          </Tooltip>
 
-          <div className={`${styles.modeBadge} ${styles[mode]}`}>
+          <Badge
+            variant={mode === "hitl" ? "secondary" : "warning"}
+            className="text-xs"
+          >
             {mode === "hitl" ? "HITL" : "YOLO"}
-          </div>
+          </Badge>
 
-          <button
-            type="button"
-            className={styles.configButton}
-            onClick={() => setConfigOpen(true)}
-            aria-label="Settings"
-            title="Settings"
-          >
-            <span className={styles.configIcon}>⚙</span>
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setConfigOpen(true)}
+                aria-label="Settings"
+              >
+                <Settings className="h-5 w-5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Settings</TooltipContent>
+          </Tooltip>
         </div>
       </header>
 

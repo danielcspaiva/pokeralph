@@ -7,7 +7,9 @@
 
 import { Link } from "react-router-dom";
 import type { Task } from "@pokeralph/core/types";
-import styles from "./TaskCard.module.css";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface TaskCardProps {
   /** Task to display */
@@ -19,7 +21,14 @@ interface TaskCardProps {
  */
 interface StatusConfig {
   label: string;
-  className: string;
+  variant:
+    | "pending"
+    | "planning"
+    | "in_progress"
+    | "paused"
+    | "completed"
+    | "failed";
+  dotClass: string;
 }
 
 /**
@@ -27,19 +36,44 @@ interface StatusConfig {
  */
 const defaultStatusConfig: StatusConfig = {
   label: "Pending",
-  className: "pending",
+  variant: "pending",
+  dotClass: "bg-[hsl(var(--muted-foreground))]",
 };
 
 /**
  * Status indicator colors mapping
  */
 const statusConfig: Record<string, StatusConfig> = {
-  pending: { label: "Pending", className: "pending" },
-  planning: { label: "Planning", className: "planning" },
-  in_progress: { label: "In Progress", className: "inProgress" },
-  paused: { label: "Paused", className: "paused" },
-  completed: { label: "Completed", className: "completed" },
-  failed: { label: "Failed", className: "failed" },
+  pending: {
+    label: "Pending",
+    variant: "pending",
+    dotClass: "bg-[hsl(var(--muted-foreground))]",
+  },
+  planning: {
+    label: "Planning",
+    variant: "planning",
+    dotClass: "bg-blue-500",
+  },
+  in_progress: {
+    label: "In Progress",
+    variant: "in_progress",
+    dotClass: "bg-[hsl(var(--warning))]",
+  },
+  paused: {
+    label: "Paused",
+    variant: "paused",
+    dotClass: "bg-orange-500",
+  },
+  completed: {
+    label: "Completed",
+    variant: "completed",
+    dotClass: "bg-[hsl(var(--success))]",
+  },
+  failed: {
+    label: "Failed",
+    variant: "failed",
+    dotClass: "bg-[hsl(var(--destructive))]",
+  },
 };
 
 /**
@@ -56,22 +90,28 @@ export function TaskCard({ task }: TaskCardProps) {
   const config = getStatusConfig(task.status);
 
   return (
-    <Link to={`/task/${task.id}`} className={styles.card}>
-      <div className={styles.header}>
-        <span className={`${styles.status} ${styles[config.className]}`} />
-        <span className={styles.priority}>#{task.priority}</span>
-      </div>
-      <h3 className={styles.title}>{task.title}</h3>
-      <div className={styles.footer}>
-        <span className={`${styles.badge} ${styles[config.className]}`}>
-          {config.label}
-        </span>
-        {task.acceptanceCriteria.length > 0 && (
-          <span className={styles.criteria}>
-            {task.acceptanceCriteria.length} criteria
+    <Link to={`/task/${task.id}`} className="block">
+      <Card className="p-3 transition-colors hover:bg-[hsl(var(--accent))]">
+        <div className="flex items-center gap-2">
+          <span
+            className={cn("h-2 w-2 shrink-0 rounded-full", config.dotClass)}
+          />
+          <span className="text-xs text-[hsl(var(--muted-foreground))]">
+            #{task.priority}
           </span>
-        )}
-      </div>
+        </div>
+        <h3 className="mt-1 line-clamp-2 text-sm font-medium">{task.title}</h3>
+        <div className="mt-2 flex items-center justify-between">
+          <Badge variant={config.variant} className="text-xs">
+            {config.label}
+          </Badge>
+          {task.acceptanceCriteria.length > 0 && (
+            <span className="text-xs text-[hsl(var(--muted-foreground))]">
+              {task.acceptanceCriteria.length} criteria
+            </span>
+          )}
+        </div>
+      </Card>
     </Link>
   );
 }

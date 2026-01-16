@@ -8,12 +8,25 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
+  Loader2,
+  Play,
+  Pause,
+  RotateCcw,
+  X,
+  Check,
+  ArrowLeft,
+  Clock,
+  PartyPopper,
+  AlertCircle,
+  Search,
+} from "lucide-react";
+import {
   useTask,
   useCurrentBattle,
   useBattleProgress,
   useConfig,
   useAppStore,
-} from "@/stores/app-store.ts";
+} from "@/stores/app-store";
 import {
   getTask,
   getCurrentBattle,
@@ -23,9 +36,18 @@ import {
   resumeBattle,
   cancelBattle,
   approveBattle,
-} from "@/api/client.ts";
-import { type Task, type Progress, type FeedbackResult, TaskStatus } from "@pokeralph/core/types";
-import styles from "./Battle.module.css";
+} from "@/api/client";
+import {
+  type Task,
+  type Progress,
+  type FeedbackResult,
+  TaskStatus,
+} from "@pokeralph/core/types";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress as ProgressBar } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 // ==========================================================================
 // Types
@@ -34,32 +56,17 @@ import styles from "./Battle.module.css";
 /**
  * Battle view stage
  */
-type BattleStage = "idle" | "running" | "paused" | "awaiting_approval" | "completed" | "failed";
+type BattleStage =
+  | "idle"
+  | "running"
+  | "paused"
+  | "awaiting_approval"
+  | "completed"
+  | "failed";
 
 // ==========================================================================
 // Sub-components
 // ==========================================================================
-
-/**
- * Progress bar component
- */
-interface ProgressBarProps {
-  current: number;
-  max: number;
-}
-
-function ProgressBar({ current, max }: ProgressBarProps) {
-  const percentage = max > 0 ? Math.min((current / max) * 100, 100) : 0;
-
-  return (
-    <div className={styles.progressBar}>
-      <div className={styles.progressFill} style={{ width: `${percentage}%` }} />
-      <span className={styles.progressText}>
-        Iteration {current} of {max}
-      </span>
-    </div>
-  );
-}
 
 /**
  * Timer component showing elapsed time
@@ -75,7 +82,6 @@ function Timer({ startTime, isRunning }: TimerProps) {
   useEffect(() => {
     if (!startTime || !isRunning) {
       if (!isRunning && startTime) {
-        // Keep showing last elapsed time when paused
         setElapsed(Math.floor((Date.now() - startTime.getTime()) / 1000));
       }
       return;
@@ -95,9 +101,9 @@ function Timer({ startTime, isRunning }: TimerProps) {
   };
 
   return (
-    <div className={styles.timer}>
-      <span className={styles.timerLabel}>Elapsed</span>
-      <span className={styles.timerValue}>{formatTime(elapsed)}</span>
+    <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
+      <Clock className="h-4 w-4" />
+      <span className="font-mono">{formatTime(elapsed)}</span>
     </div>
   );
 }
@@ -115,20 +121,22 @@ function FeedbackStatus({ results }: FeedbackStatusProps) {
   }
 
   return (
-    <div className={styles.feedbackStatus}>
-      <span className={styles.feedbackLabel}>Feedback Loops</span>
-      <div className={styles.feedbackLoops}>
-        {Object.entries(results).map(([name, result]) => (
-          <div
-            key={name}
-            className={`${styles.feedbackLoop} ${result.passed ? styles.passed : styles.failed}`}
-            title={result.output || (result.passed ? "Passed" : "Failed")}
-          >
-            <span className={styles.feedbackIcon}>{result.passed ? "✓" : "✗"}</span>
-            <span className={styles.feedbackName}>{name}</span>
-          </div>
-        ))}
-      </div>
+    <div className="flex flex-wrap gap-2">
+      {Object.entries(results).map(([name, result]) => (
+        <Badge
+          key={name}
+          variant={result.passed ? "success" : "destructive"}
+          className="gap-1"
+          title={result.output || (result.passed ? "Passed" : "Failed")}
+        >
+          {result.passed ? (
+            <Check className="h-3 w-3" />
+          ) : (
+            <X className="h-3 w-3" />
+          )}
+          {name}
+        </Badge>
+      ))}
     </div>
   );
 }
@@ -145,46 +153,50 @@ interface LogAreaProps {
 function LogArea({ logs, lastOutput, isRunning }: LogAreaProps) {
   const logsEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom
   // biome-ignore lint/correctness/useExhaustiveDependencies: Intentionally trigger scroll on log changes
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [logs.length, lastOutput]);
 
   return (
-    <div className={styles.logArea}>
-      <div className={styles.logHeader}>
-        <span className={styles.logLabel}>Output</span>
-        {isRunning && (
-          <span className={styles.liveIndicator}>
-            <span className={styles.liveDot} />
-            Live
-          </span>
-        )}
-      </div>
-      <div className={styles.logContent}>
-        {logs.length === 0 && !lastOutput ? (
-          <div className={styles.logEmpty}>
-            {isRunning ? "Waiting for output..." : "No output yet"}
-          </div>
-        ) : (
-          <>
-{logs.map((log, idx) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: Log lines are streaming and don't have stable IDs
-              <div key={`log-${idx}`} className={styles.logLine}>
-                {log}
-              </div>
-            ))}
-            {lastOutput && (
-              <div className={styles.logLine}>
-                {lastOutput}
-              </div>
-            )}
-          </>
-        )}
-        <div ref={logsEndRef} />
-      </div>
-    </div>
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base">Output</CardTitle>
+          {isRunning && (
+            <div className="flex items-center gap-2 text-sm text-[hsl(var(--success))]">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[hsl(var(--success))] opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-[hsl(var(--success))]" />
+              </span>
+              Live
+            </div>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <ScrollArea className="h-64 rounded-md bg-[hsl(var(--muted)/0.5)] p-4 font-mono text-sm">
+          {logs.length === 0 && !lastOutput ? (
+            <div className="text-[hsl(var(--muted-foreground))]">
+              {isRunning ? "Waiting for output..." : "No output yet"}
+            </div>
+          ) : (
+            <>
+              {logs.map((log, idx) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: Log lines are streaming and don't have stable IDs
+                <div key={`log-${idx}`} className="whitespace-pre-wrap">
+                  {log}
+                </div>
+              ))}
+              {lastOutput && (
+                <div className="whitespace-pre-wrap">{lastOutput}</div>
+              )}
+            </>
+          )}
+          <div ref={logsEndRef} />
+        </ScrollArea>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -197,183 +209,28 @@ interface TaskInfoProps {
 
 function TaskInfo({ task }: TaskInfoProps) {
   return (
-    <div className={styles.taskInfo}>
-      <div className={styles.taskHeader}>
-        <span className={styles.taskPriority}>#{task.priority}</span>
-        <h2 className={styles.taskTitle}>{task.title}</h2>
-      </div>
-      <p className={styles.taskDescription}>{task.description}</p>
-      {task.acceptanceCriteria.length > 0 && (
-        <div className={styles.acceptanceCriteria}>
-          <span className={styles.criteriaLabel}>Acceptance Criteria</span>
-          <ul className={styles.criteriaList}>
-            {task.acceptanceCriteria.map((criterion, idx) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: Acceptance criteria are static and don't change order
-              <li key={`criterion-${idx}`}>{criterion}</li>
-            ))}
-          </ul>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary">#{task.priority}</Badge>
+          <CardTitle>{task.title}</CardTitle>
         </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * Control buttons
- */
-interface ControlButtonsProps {
-  stage: BattleStage;
-  onPause: () => void;
-  onResume: () => void;
-  onCancel: () => void;
-  onApprove: () => void;
-  onRetry: () => void;
-  isLoading: boolean;
-}
-
-function ControlButtons({
-  stage,
-  onPause,
-  onResume,
-  onCancel,
-  onApprove,
-  onRetry,
-  isLoading,
-}: ControlButtonsProps) {
-  if (stage === "completed") {
-    return null;
-  }
-
-  if (stage === "failed") {
-    return (
-      <div className={styles.controls}>
-        <button
-          type="button"
-          className={styles.primaryButton}
-          onClick={onRetry}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <>
-              <span className={styles.spinner} />
-              Retrying...
-            </>
-          ) : (
-            "Retry Battle"
-          )}
-        </button>
-        <Link to="/" className={styles.secondaryButton}>
-          Back to Dashboard
-        </Link>
-      </div>
-    );
-  }
-
-  if (stage === "awaiting_approval") {
-    return (
-      <div className={styles.controls}>
-        <button
-          type="button"
-          className={`${styles.primaryButton} ${styles.approveButton}`}
-          onClick={onApprove}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <>
-              <span className={styles.spinner} />
-              Approving...
-            </>
-          ) : (
-            "Approve & Continue"
-          )}
-        </button>
-        <button
-          type="button"
-          className={`${styles.dangerButton}`}
-          onClick={onCancel}
-          disabled={isLoading}
-        >
-          Cancel Battle
-        </button>
-      </div>
-    );
-  }
-
-  if (stage === "paused") {
-    return (
-      <div className={styles.controls}>
-        <button
-          type="button"
-          className={styles.primaryButton}
-          onClick={onResume}
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <>
-              <span className={styles.spinner} />
-              Resuming...
-            </>
-          ) : (
-            "Resume Battle"
-          )}
-        </button>
-        <button
-          type="button"
-          className={styles.dangerButton}
-          onClick={onCancel}
-          disabled={isLoading}
-        >
-          Cancel Battle
-        </button>
-      </div>
-    );
-  }
-
-  if (stage === "running") {
-    return (
-      <div className={styles.controls}>
-        <button
-          type="button"
-          className={styles.secondaryButton}
-          onClick={onPause}
-          disabled={isLoading}
-        >
-          {isLoading ? "Pausing..." : "Pause"}
-        </button>
-        <button
-          type="button"
-          className={styles.dangerButton}
-          onClick={onCancel}
-          disabled={isLoading}
-        >
-          Cancel
-        </button>
-      </div>
-    );
-  }
-
-  // Idle state - start button
-  return (
-    <div className={styles.controls}>
-      <button
-        type="button"
-        className={styles.primaryButton}
-        onClick={onRetry}
-        disabled={isLoading}
-      >
-        {isLoading ? (
-          <>
-            <span className={styles.spinner} />
-            Starting...
-          </>
-        ) : (
-          "Start Battle"
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-[hsl(var(--muted-foreground))]">{task.description}</p>
+        {task.acceptanceCriteria.length > 0 && (
+          <div>
+            <span className="text-sm font-medium">Acceptance Criteria</span>
+            <ul className="mt-2 list-inside list-disc text-sm text-[hsl(var(--muted-foreground))]">
+              {task.acceptanceCriteria.map((criterion, idx) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: Acceptance criteria are static and don't change order
+                <li key={`criterion-${idx}`}>{criterion}</li>
+              ))}
+            </ul>
+          </div>
         )}
-      </button>
-      <Link to="/" className={styles.secondaryButton}>
-        Back to Dashboard
-      </Link>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -382,29 +239,34 @@ function ControlButtons({
  */
 interface SuccessMessageProps {
   taskTitle: string;
+  taskId: string;
 }
 
-function SuccessMessage({ taskTitle }: SuccessMessageProps) {
+function SuccessMessage({ taskTitle, taskId }: SuccessMessageProps) {
   return (
-    <div className={styles.successMessage}>
-      <div className={styles.confetti}>
-        <span>🎉</span>
-        <span>✨</span>
-        <span>🎊</span>
-      </div>
-      <h3 className={styles.successTitle}>Battle Complete!</h3>
-      <p className={styles.successText}>
-        Successfully completed: <strong>{taskTitle}</strong>
-      </p>
-      <div className={styles.successActions}>
-        <Link to="/" className={styles.primaryButton}>
-          Back to Dashboard
-        </Link>
-        <Link to={`/history/${encodeURIComponent(taskTitle)}`} className={styles.secondaryButton}>
-          View History
-        </Link>
-      </div>
-    </div>
+    <Card className="border-[hsl(var(--success))] bg-[hsl(var(--success)/0.1)]">
+      <CardContent className="py-8 text-center">
+        <div className="mb-4 flex justify-center gap-2 text-4xl">
+          <PartyPopper className="h-12 w-12 text-[hsl(var(--success))]" />
+        </div>
+        <h3 className="text-xl font-bold text-[hsl(var(--success))]">
+          Battle Complete!
+        </h3>
+        <p className="mt-2 text-[hsl(var(--muted-foreground))]">
+          Successfully completed: <strong>{taskTitle}</strong>
+        </p>
+        <div className="mt-6 flex justify-center gap-2">
+          <Button asChild>
+            <Link to="/">Back to Dashboard</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link to={`/history/${encodeURIComponent(taskId)}`}>
+              View History
+            </Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -418,14 +280,20 @@ interface ErrorMessageProps {
 
 function ErrorMessage({ error, taskTitle }: ErrorMessageProps) {
   return (
-    <div className={styles.errorMessage}>
-      <div className={styles.errorIcon}>❌</div>
-      <h3 className={styles.errorTitle}>Battle Failed</h3>
-      <p className={styles.errorText}>
-        Task &quot;<strong>{taskTitle}</strong>&quot; encountered an error:
-      </p>
-      <div className={styles.errorDetails}>{error}</div>
-    </div>
+    <Card className="border-[hsl(var(--destructive))] bg-[hsl(var(--destructive)/0.1)]">
+      <CardContent className="py-8 text-center">
+        <AlertCircle className="mx-auto mb-4 h-12 w-12 text-[hsl(var(--destructive))]" />
+        <h3 className="text-xl font-bold text-[hsl(var(--destructive))]">
+          Battle Failed
+        </h3>
+        <p className="mt-2 text-[hsl(var(--muted-foreground))]">
+          Task &quot;<strong>{taskTitle}</strong>&quot; encountered an error:
+        </p>
+        <div className="mt-4 rounded-md bg-[hsl(var(--muted))] p-4 text-sm">
+          {error}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -434,9 +302,9 @@ function ErrorMessage({ error, taskTitle }: ErrorMessageProps) {
  */
 function LoadingState() {
   return (
-    <div className={styles.loading}>
-      <span className={styles.spinner} />
-      <p>Loading task...</p>
+    <div className="flex flex-col items-center justify-center py-16">
+      <Loader2 className="mb-4 h-8 w-8 animate-spin text-[hsl(var(--primary))]" />
+      <p className="text-[hsl(var(--muted-foreground))]">Loading task...</p>
     </div>
   );
 }
@@ -446,15 +314,15 @@ function LoadingState() {
  */
 function NotFoundState() {
   return (
-    <div className={styles.notFound}>
-      <div className={styles.notFoundIcon}>🔍</div>
-      <h2 className={styles.notFoundTitle}>Task Not Found</h2>
-      <p className={styles.notFoundText}>
+    <div className="flex flex-col items-center justify-center py-16">
+      <Search className="mb-4 h-12 w-12 text-[hsl(var(--muted-foreground))]" />
+      <h2 className="text-xl font-bold">Task Not Found</h2>
+      <p className="mt-2 text-[hsl(var(--muted-foreground))]">
         The requested task could not be found.
       </p>
-      <Link to="/" className={styles.primaryButton}>
-        Back to Dashboard
-      </Link>
+      <Button asChild className="mt-6">
+        <Link to="/">Back to Dashboard</Link>
+      </Button>
     </div>
   );
 }
@@ -485,7 +353,9 @@ export function Battle() {
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState<BattleStage>("idle");
-  const [iterationStartTime, setIterationStartTime] = useState<Date | null>(null);
+  const [iterationStartTime, setIterationStartTime] = useState<Date | null>(
+    null
+  );
 
   // Derive stage from state
   useEffect(() => {
@@ -542,11 +412,9 @@ export function Battle() {
       setError(null);
 
       try {
-        // Load task
         const loadedTask = await getTask(taskId);
         setTask(loadedTask);
 
-        // Check for active battle
         const battleState = await getCurrentBattle();
         if (battleState.battle && battleState.battle.taskId === taskId) {
           setCurrentBattle({
@@ -564,7 +432,6 @@ export function Battle() {
           }
         }
 
-        // Load progress if available
         try {
           const progressData = await getBattleProgress(taskId);
           if (progressData.progress) {
@@ -575,7 +442,6 @@ export function Battle() {
           // Progress might not exist yet
         }
       } catch (err) {
-        // Task not found is handled by showing NotFoundState
         console.error("Failed to load task:", err);
       } finally {
         setIsLoading(false);
@@ -601,7 +467,8 @@ export function Battle() {
         setTask({ ...task, status: TaskStatus.InProgress });
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to start battle";
+      const message =
+        err instanceof Error ? err.message : "Failed to start battle";
       setError(message);
     } finally {
       setIsActionLoading(false);
@@ -675,39 +542,67 @@ export function Battle() {
 
   // Determine max iterations
   const maxIterations = config?.maxIterationsPerTask ?? 10;
+  const currentIteration =
+    currentBattle?.iteration ?? progress?.currentIteration ?? 0;
+  const progressPercentage =
+    maxIterations > 0
+      ? Math.min((currentIteration / maxIterations) * 100, 100)
+      : 0;
 
   return (
-    <div className={styles.battle}>
+    <div className="space-y-6">
       {/* Task info section */}
       <TaskInfo task={task} />
 
       {/* Status section */}
-      <div className={styles.statusSection}>
-        <div className={styles.statusHeader}>
-          <span className={`${styles.stageBadge} ${styles[stage]}`}>
-            {stage === "idle" && "Ready"}
-            {stage === "running" && "Running"}
-            {stage === "paused" && "Paused"}
-            {stage === "awaiting_approval" && "Awaiting Approval"}
-            {stage === "completed" && "Completed"}
-            {stage === "failed" && "Failed"}
-          </span>
-          <Timer
-            startTime={iterationStartTime}
-            isRunning={stage === "running"}
-          />
-        </div>
+      <Card>
+        <CardContent className="p-4">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Badge
+                variant={
+                  stage === "running"
+                    ? "default"
+                    : stage === "completed"
+                      ? "success"
+                      : stage === "failed"
+                        ? "destructive"
+                        : stage === "awaiting_approval"
+                          ? "warning"
+                          : "secondary"
+                }
+              >
+                {stage === "idle" && "Ready"}
+                {stage === "running" && "Running"}
+                {stage === "paused" && "Paused"}
+                {stage === "awaiting_approval" && "Awaiting Approval"}
+                {stage === "completed" && "Completed"}
+                {stage === "failed" && "Failed"}
+              </Badge>
+              <FeedbackStatus results={progress?.feedbackResults ?? null} />
+            </div>
+            <Timer
+              startTime={iterationStartTime}
+              isRunning={stage === "running"}
+            />
+          </div>
 
-        <ProgressBar
-          current={currentBattle?.iteration ?? progress?.currentIteration ?? 0}
-          max={maxIterations}
-        />
-
-        <FeedbackStatus results={progress?.feedbackResults ?? null} />
-      </div>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>
+                Iteration {currentIteration} of {maxIterations}
+              </span>
+              <span>{Math.round(progressPercentage)}%</span>
+            </div>
+            <ProgressBar value={progressPercentage} />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Success message */}
-      {stage === "completed" && <SuccessMessage taskTitle={task.title} />}
+      {stage === "completed" && (
+        <SuccessMessage taskTitle={task.title} taskId={task.id} />
+      )}
 
       {/* Error message */}
       {stage === "failed" && (
@@ -728,33 +623,147 @@ export function Battle() {
 
       {/* HITL approval message */}
       {stage === "awaiting_approval" && (
-        <div className={styles.approvalMessage}>
-          <div className={styles.approvalIcon}>⏸️</div>
-          <h4 className={styles.approvalTitle}>Review Required</h4>
-          <p className={styles.approvalText}>
-            Iteration {currentBattle?.iteration ?? progress?.currentIteration ?? 0} complete.
-            Review the changes and approve to continue, or cancel the battle.
-          </p>
-        </div>
+        <Card className="border-[hsl(var(--warning))] bg-[hsl(var(--warning)/0.1)]">
+          <CardContent className="py-6 text-center">
+            <Pause className="mx-auto mb-4 h-8 w-8 text-[hsl(var(--warning))]" />
+            <h4 className="text-lg font-semibold">Review Required</h4>
+            <p className="mt-2 text-[hsl(var(--muted-foreground))]">
+              Iteration {currentIteration} complete. Review the changes and
+              approve to continue, or cancel the battle.
+            </p>
+          </CardContent>
+        </Card>
       )}
 
       {/* Control buttons */}
-      <ControlButtons
-        stage={stage}
-        onPause={handlePause}
-        onResume={handleResume}
-        onCancel={handleCancel}
-        onApprove={handleApprove}
-        onRetry={handleStartBattle}
-        isLoading={isActionLoading}
-      />
+      <div className="flex justify-end gap-2">
+        {stage === "completed" ? null : stage === "failed" ? (
+          <>
+            <Button onClick={handleStartBattle} disabled={isActionLoading}>
+              {isActionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Retrying...
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Retry Battle
+                </>
+              )}
+            </Button>
+            <Button variant="outline" asChild>
+              <Link to="/">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Dashboard
+              </Link>
+            </Button>
+          </>
+        ) : stage === "awaiting_approval" ? (
+          <>
+            <Button
+              variant="destructive"
+              onClick={handleCancel}
+              disabled={isActionLoading}
+            >
+              Cancel Battle
+            </Button>
+            <Button
+              variant="success"
+              onClick={handleApprove}
+              disabled={isActionLoading}
+            >
+              {isActionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Approving...
+                </>
+              ) : (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  Approve & Continue
+                </>
+              )}
+            </Button>
+          </>
+        ) : stage === "paused" ? (
+          <>
+            <Button
+              variant="destructive"
+              onClick={handleCancel}
+              disabled={isActionLoading}
+            >
+              Cancel Battle
+            </Button>
+            <Button onClick={handleResume} disabled={isActionLoading}>
+              {isActionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Resuming...
+                </>
+              ) : (
+                <>
+                  <Play className="mr-2 h-4 w-4" />
+                  Resume Battle
+                </>
+              )}
+            </Button>
+          </>
+        ) : stage === "running" ? (
+          <>
+            <Button
+              variant="destructive"
+              onClick={handleCancel}
+              disabled={isActionLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handlePause}
+              disabled={isActionLoading}
+            >
+              {isActionLoading ? "Pausing..." : "Pause"}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button variant="outline" asChild>
+              <Link to="/">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Dashboard
+              </Link>
+            </Button>
+            <Button onClick={handleStartBattle} disabled={isActionLoading}>
+              {isActionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                <>
+                  <Play className="mr-2 h-4 w-4" />
+                  Start Battle
+                </>
+              )}
+            </Button>
+          </>
+        )}
+      </div>
 
-      {/* Loading overlay during actions */}
+      {/* Loading overlay during running */}
       {stage === "running" && (
-        <div className={styles.loadingOverlay}>
-          <div className={styles.pulseRing} />
-          <span className={styles.loadingText}>Claude is working...</span>
-        </div>
+        <Card className="border-[hsl(var(--primary))] bg-[hsl(var(--primary)/0.05)]">
+          <CardContent className="flex items-center justify-center gap-4 py-6">
+            <div className="relative">
+              <div className="h-8 w-8 animate-ping rounded-full bg-[hsl(var(--primary)/0.3)]" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="h-4 w-4 rounded-full bg-[hsl(var(--primary))]" />
+              </div>
+            </div>
+            <span className="text-lg font-medium">Claude is working...</span>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

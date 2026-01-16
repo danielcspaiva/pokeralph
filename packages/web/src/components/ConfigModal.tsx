@@ -9,7 +9,22 @@ import { useState, useEffect, useCallback } from "react";
 import type { Config, ExecutionMode } from "@pokeralph/core/types";
 import { useConfig, useAppStore } from "../stores/app-store";
 import { updateConfig as updateConfigApi } from "../api/client";
-import styles from "./ConfigModal.module.css";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 interface ConfigModalProps {
   /** Whether the modal is open */
@@ -136,152 +151,135 @@ export function ConfigModal({ isOpen, onClose }: ConfigModalProps) {
     }
   };
 
-  /**
-   * Handles closing without saving
-   */
-  const handleCancel = () => {
-    setError(null);
-    setErrors({});
-    onClose();
-  };
-
-  /**
-   * Handles keyboard events on the overlay
-   */
-  const handleOverlayKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
-      handleCancel();
-    }
-  };
-
-  if (!isOpen) return null;
-
   return (
-    <div className={styles.overlay}>
-      <button
-        type="button"
-        className={styles.backdropButton}
-        onClick={handleCancel}
-        onKeyDown={handleOverlayKeyDown}
-        aria-label="Close modal"
-      />
-      <dialog
-        className={styles.modal}
-        open
-        aria-labelledby="config-modal-title"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={(e) => e.stopPropagation()}
-      >
-        <div className={styles.header}>
-          <h2 id="config-modal-title" className={styles.title}>
-            Settings
-          </h2>
-          <button
-            type="button"
-            className={styles.closeButton}
-            onClick={handleCancel}
-            aria-label="Close"
-          >
-            &times;
-          </button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Settings</DialogTitle>
+          <DialogDescription>
+            Configure PokéRalph behavior and execution settings.
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className={styles.content}>
-          {error && <div className={styles.errorBanner}>{error}</div>}
+        <div className="space-y-6 py-4">
+          {error && (
+            <div className="rounded-md bg-[hsl(var(--destructive)/0.1)] p-3 text-sm text-[hsl(var(--destructive))]">
+              {error}
+            </div>
+          )}
 
           {/* Max Iterations Slider */}
-          <div className={styles.formGroup}>
-            <label htmlFor="maxIterations" className={styles.label}>
-              Max Iterations per Task
-              <span className={styles.value}>{maxIterations}</span>
-            </label>
-            <input
-              type="range"
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="maxIterations">Max Iterations per Task</Label>
+              <span className="text-sm font-medium">{maxIterations}</span>
+            </div>
+            <Slider
               id="maxIterations"
               min={1}
               max={50}
-              value={maxIterations}
-              onChange={(e) => setMaxIterations(Number(e.target.value))}
-              className={styles.slider}
+              step={1}
+              value={[maxIterations]}
+              onValueChange={(value) => setMaxIterations(value[0] ?? maxIterations)}
             />
-            <div className={styles.sliderLabels}>
+            <div className="flex justify-between text-xs text-[hsl(var(--muted-foreground))]">
               <span>1</span>
               <span>25</span>
               <span>50</span>
             </div>
             {errors.maxIterationsPerTask && (
-              <span className={styles.fieldError}>
+              <p className="text-xs text-[hsl(var(--destructive))]">
                 {errors.maxIterationsPerTask}
-              </span>
+              </p>
             )}
           </div>
 
+          <Separator />
+
           {/* Execution Mode Toggle */}
-          <fieldset className={styles.fieldset}>
-            <legend className={styles.legend}>Execution Mode</legend>
-            <div className={styles.toggleGroup}>
+          <div className="space-y-3">
+            <Label>Execution Mode</Label>
+            <div className="flex rounded-lg bg-[hsl(var(--muted))] p-1">
               <button
                 type="button"
-                className={`${styles.toggleButton} ${mode === "hitl" ? styles.active : ""}`}
+                className={cn(
+                  "flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors",
+                  mode === "hitl"
+                    ? "bg-[hsl(var(--background))] shadow"
+                    : "hover:bg-[hsl(var(--background)/0.5)]"
+                )}
                 onClick={() => setMode("hitl")}
               >
-                HITL
-                <span className={styles.toggleHint}>Human in the Loop</span>
+                <div>HITL</div>
+                <div className="text-xs text-[hsl(var(--muted-foreground))]">
+                  Human in the Loop
+                </div>
               </button>
               <button
                 type="button"
-                className={`${styles.toggleButton} ${mode === "yolo" ? styles.active : ""}`}
+                className={cn(
+                  "flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors",
+                  mode === "yolo"
+                    ? "bg-[hsl(var(--background))] shadow"
+                    : "hover:bg-[hsl(var(--background)/0.5)]"
+                )}
                 onClick={() => setMode("yolo")}
               >
-                YOLO
-                <span className={styles.toggleHint}>Automatic</span>
+                <div>YOLO</div>
+                <div className="text-xs text-[hsl(var(--muted-foreground))]">
+                  Automatic
+                </div>
               </button>
             </div>
-          </fieldset>
+          </div>
+
+          <Separator />
 
           {/* Feedback Loops Checkboxes */}
-          <fieldset className={styles.fieldset}>
-            <legend className={styles.legend}>Feedback Loops</legend>
-            <div className={styles.checkboxGroup}>
+          <div className="space-y-3">
+            <Label>Feedback Loops</Label>
+            <div className="grid grid-cols-2 gap-3">
               {AVAILABLE_FEEDBACK_LOOPS.map((loop) => (
-                <label key={loop} className={styles.checkboxLabel}>
-                  <input
-                    type="checkbox"
+                <div key={loop} className="flex items-center gap-2 text-sm">
+                  <Checkbox
+                    id={`feedback-${loop}`}
                     checked={feedbackLoops.includes(loop)}
-                    onChange={() => handleFeedbackLoopToggle(loop)}
-                    className={styles.checkbox}
+                    onCheckedChange={() => handleFeedbackLoopToggle(loop)}
                   />
-                  <span className={styles.checkboxText}>{loop}</span>
-                </label>
+                  <Label htmlFor={`feedback-${loop}`}>{loop}</Label>
+                </div>
               ))}
             </div>
-          </fieldset>
+          </div>
+
+          <Separator />
 
           {/* Timeout Minutes Input */}
-          <div className={styles.formGroup}>
-            <label htmlFor="timeoutMinutes" className={styles.label}>
-              Timeout (minutes)
-            </label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="timeoutMinutes">Timeout (minutes)</Label>
+            <Input
               type="number"
               id="timeoutMinutes"
               min={1}
               max={120}
               value={timeoutMinutes}
               onChange={(e) => setTimeoutMinutes(Number(e.target.value))}
-              className={`${styles.numberInput} ${errors.timeoutMinutes ? styles.inputError : ""}`}
+              className={cn(
+                errors.timeoutMinutes &&
+                  "border-[hsl(var(--destructive))] focus-visible:ring-[hsl(var(--destructive))]"
+              )}
             />
             {errors.timeoutMinutes && (
-              <span className={styles.fieldError}>{errors.timeoutMinutes}</span>
+              <p className="text-xs text-[hsl(var(--destructive))]">
+                {errors.timeoutMinutes}
+              </p>
             )}
           </div>
 
           {/* Polling Interval Input */}
-          <div className={styles.formGroup}>
-            <label htmlFor="pollingIntervalMs" className={styles.label}>
-              Polling Interval (ms)
-            </label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="pollingIntervalMs">Polling Interval (ms)</Label>
+            <Input
               type="number"
               id="pollingIntervalMs"
               min={500}
@@ -289,54 +287,40 @@ export function ConfigModal({ isOpen, onClose }: ConfigModalProps) {
               step={100}
               value={pollingIntervalMs}
               onChange={(e) => setPollingIntervalMs(Number(e.target.value))}
-              className={`${styles.numberInput} ${errors.pollingIntervalMs ? styles.inputError : ""}`}
+              className={cn(
+                errors.pollingIntervalMs &&
+                  "border-[hsl(var(--destructive))] focus-visible:ring-[hsl(var(--destructive))]"
+              )}
             />
             {errors.pollingIntervalMs && (
-              <span className={styles.fieldError}>
+              <p className="text-xs text-[hsl(var(--destructive))]">
                 {errors.pollingIntervalMs}
-              </span>
+              </p>
             )}
           </div>
 
+          <Separator />
+
           {/* Auto Commit Toggle */}
-          <div className={styles.formGroup}>
-            <div className={styles.toggleLabel}>
-              <span id="auto-commit-label" className={styles.label}>Auto-commit on Success</span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={autoCommit}
-                aria-labelledby="auto-commit-label"
-                className={`${styles.switch} ${autoCommit ? styles.switchOn : ""}`}
-                onClick={() => setAutoCommit(!autoCommit)}
-              >
-                <span className={styles.switchTrack}>
-                  <span className={styles.switchThumb} />
-                </span>
-              </button>
-            </div>
+          <div className="flex items-center justify-between">
+            <Label htmlFor="autoCommit">Auto-commit on Success</Label>
+            <Switch
+              id="autoCommit"
+              checked={autoCommit}
+              onCheckedChange={setAutoCommit}
+            />
           </div>
         </div>
 
-        <div className={styles.footer}>
-          <button
-            type="button"
-            className={styles.cancelButton}
-            onClick={handleCancel}
-            disabled={isSaving}
-          >
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isSaving}>
             Cancel
-          </button>
-          <button
-            type="button"
-            className={styles.saveButton}
-            onClick={handleSave}
-            disabled={isSaving}
-          >
+          </Button>
+          <Button onClick={handleSave} disabled={isSaving}>
             {isSaving ? "Saving..." : "Save"}
-          </button>
-        </div>
-      </dialog>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

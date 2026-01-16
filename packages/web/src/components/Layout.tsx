@@ -7,11 +7,11 @@
 
 import type { ReactNode } from "react";
 import { useState, useEffect } from "react";
-import { Sidebar } from "./Sidebar.tsx";
-import { Header } from "./Header.tsx";
+import { Sidebar } from "./Sidebar";
+import { Header } from "./Header";
 import { connect, setupWebSocketListeners, useAppStore } from "@/stores";
-import { getPRD } from "@/api/client.ts";
-import styles from "./Layout.module.css";
+import { getPRD } from "@/api/client";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 interface LayoutProps {
   /** Main content to render */
@@ -54,12 +54,14 @@ export function Layout({ children }: LayoutProps) {
   const toggleSidebar = () => setSidebarOpen((prev) => !prev);
 
   return (
-    <div className={styles.layout}>
-      <Sidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />
-      <div className={styles.mainArea}>
-        <Header onMenuClick={toggleSidebar} sidebarOpen={sidebarOpen} />
-        <main className={styles.content}>{children}</main>
+    <TooltipProvider>
+      <div className="flex min-h-screen bg-[hsl(var(--background))]">
+        <Sidebar isOpen={sidebarOpen} onToggle={toggleSidebar} />
+        <div className="flex flex-1 flex-col">
+          <Header onMenuClick={toggleSidebar} sidebarOpen={sidebarOpen} />
+          <main className="flex-1 overflow-auto p-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }

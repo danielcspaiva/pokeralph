@@ -8,17 +8,38 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
+  Loader2,
+  Play,
+  Search,
+  FileText,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  GitCommit,
+  ArrowLeft,
+  Check,
+  X,
+  AlertCircle,
+  Timer,
+} from "lucide-react";
+import {
   useTask,
   useBattleHistory,
   useAppStore,
-} from "@/stores/app-store.ts";
+} from "@/stores/app-store";
+import { getTask, getBattleHistory, startBattle } from "@/api/client";
 import {
-  getTask,
-  getBattleHistory,
-  startBattle,
-} from "@/api/client.ts";
-import { type Task, type Battle, type Iteration, type IterationResult, TaskStatus } from "@pokeralph/core/types";
-import styles from "./History.module.css";
+  type Task,
+  type Battle,
+  type Iteration,
+  type IterationResult,
+  TaskStatus,
+} from "@pokeralph/core/types";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 // ==========================================================================
 // Helper Functions
@@ -38,7 +59,9 @@ function formatDuration(ms: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
   if (minutes < 60) {
-    return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+    return remainingSeconds > 0
+      ? `${minutes}m ${remainingSeconds}s`
+      : `${minutes}m`;
   }
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
@@ -63,20 +86,22 @@ function formatTimestamp(isoString: string): string {
 }
 
 /**
- * Get result badge class
+ * Get result variant for badge
  */
-function getResultClass(result: IterationResult): string {
+function getResultVariant(
+  result: IterationResult
+): "success" | "destructive" | "warning" | "secondary" {
   switch (result) {
     case "success":
-      return styles.success ?? "";
+      return "success";
     case "failure":
-      return styles.failure ?? "";
+      return "destructive";
     case "timeout":
-      return styles.timeout ?? "";
+      return "warning";
     case "cancelled":
-      return styles.cancelled ?? "";
+      return "secondary";
     default:
-      return "";
+      return "secondary";
   }
 }
 
@@ -111,45 +136,69 @@ interface TaskHeaderProps {
 }
 
 function TaskHeader({ task, battle }: TaskHeaderProps) {
-  const statusClass = styles[task.status] || "";
-
   return (
-    <div className={styles.taskHeader}>
-      <div className={styles.taskInfo}>
-        <div className={styles.taskMeta}>
-          <span className={styles.taskPriority}>#{task.priority}</span>
-          <span className={`${styles.statusBadge} ${statusClass}`}>
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary">#{task.priority}</Badge>
+          <Badge
+            variant={
+              task.status === "completed"
+                ? "success"
+                : task.status === "failed"
+                  ? "destructive"
+                  : task.status === "in_progress"
+                    ? "warning"
+                    : "secondary"
+            }
+          >
             {task.status.replace("_", " ")}
-          </span>
+          </Badge>
         </div>
-        <h1 className={styles.taskTitle}>{task.title}</h1>
-        <p className={styles.taskDescription}>{task.description}</p>
-      </div>
+        <CardTitle className="mt-2">{task.title}</CardTitle>
+        <p className="text-[hsl(var(--muted-foreground))]">{task.description}</p>
+      </CardHeader>
       {battle && (
-        <div className={styles.battleStats}>
-          <div className={styles.stat}>
-            <span className={styles.statLabel}>Started</span>
-            <span className={styles.statValue}>{formatTimestamp(battle.startedAt)}</span>
-          </div>
-          {battle.completedAt && (
-            <div className={styles.stat}>
-              <span className={styles.statLabel}>Completed</span>
-              <span className={styles.statValue}>{formatTimestamp(battle.completedAt)}</span>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div>
+              <div className="text-sm text-[hsl(var(--muted-foreground))]">
+                Started
+              </div>
+              <div className="font-medium">
+                {formatTimestamp(battle.startedAt)}
+              </div>
             </div>
-          )}
-          {battle.durationMs && (
-            <div className={styles.stat}>
-              <span className={styles.statLabel}>Total Duration</span>
-              <span className={styles.statValue}>{formatDuration(battle.durationMs)}</span>
+            {battle.completedAt && (
+              <div>
+                <div className="text-sm text-[hsl(var(--muted-foreground))]">
+                  Completed
+                </div>
+                <div className="font-medium">
+                  {formatTimestamp(battle.completedAt)}
+                </div>
+              </div>
+            )}
+            {battle.durationMs && (
+              <div>
+                <div className="text-sm text-[hsl(var(--muted-foreground))]">
+                  Total Duration
+                </div>
+                <div className="font-medium">
+                  {formatDuration(battle.durationMs)}
+                </div>
+              </div>
+            )}
+            <div>
+              <div className="text-sm text-[hsl(var(--muted-foreground))]">
+                Iterations
+              </div>
+              <div className="font-medium">{battle.iterations.length}</div>
             </div>
-          )}
-          <div className={styles.stat}>
-            <span className={styles.statLabel}>Iterations</span>
-            <span className={styles.statValue}>{battle.iterations.length}</span>
           </div>
-        </div>
+        </CardContent>
       )}
-    </div>
+    </Card>
   );
 }
 
@@ -164,70 +213,112 @@ interface IterationItemProps {
   isLast: boolean;
 }
 
-function IterationItem({ iteration, isExpanded, onToggle, isFirst, isLast }: IterationItemProps) {
+function IterationItem({
+  iteration,
+  isExpanded,
+  onToggle,
+  isFirst: _isFirst,
+  isLast,
+}: IterationItemProps) {
   const duration = calculateIterationDuration(iteration);
-  const resultClass = getResultClass(iteration.result);
+  const resultVariant = getResultVariant(iteration.result);
 
   return (
-    <div className={`${styles.iterationItem} ${isFirst ? styles.first : ""} ${isLast ? styles.last : ""}`}>
+    <div className="relative flex gap-4">
       {/* Timeline connector */}
-      <div className={styles.timelineConnector}>
-        <div className={`${styles.timelineDot} ${resultClass}`} />
-        {!isLast && <div className={styles.timelineLine} />}
+      <div className="flex flex-col items-center">
+        <div
+          className={cn(
+            "flex h-8 w-8 items-center justify-center rounded-full",
+            iteration.result === "success"
+              ? "bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))]"
+              : iteration.result === "failure"
+                ? "bg-[hsl(var(--destructive))] text-[hsl(var(--destructive-foreground))]"
+                : iteration.result === "timeout"
+                  ? "bg-[hsl(var(--warning))] text-[hsl(var(--warning-foreground))]"
+                  : "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"
+          )}
+        >
+          {iteration.result === "success" ? (
+            <Check className="h-4 w-4" />
+          ) : iteration.result === "failure" ? (
+            <X className="h-4 w-4" />
+          ) : iteration.result === "timeout" ? (
+            <Timer className="h-4 w-4" />
+          ) : (
+            <AlertCircle className="h-4 w-4" />
+          )}
+        </div>
+        {!isLast && (
+          <div className="h-full w-px bg-[hsl(var(--border))]" />
+        )}
       </div>
 
       {/* Iteration content */}
-      <div className={styles.iterationContent}>
+      <div className="flex-1 pb-6">
         <button
           type="button"
-          className={styles.iterationHeader}
+          className="flex w-full items-center justify-between rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 text-left transition-colors hover:bg-[hsl(var(--accent))]"
           onClick={onToggle}
           aria-expanded={isExpanded}
         >
-          <div className={styles.iterationMain}>
-            <span className={styles.iterationNumber}>Iteration {iteration.number}</span>
-            <span className={`${styles.resultBadge} ${resultClass}`}>
-              {getResultLabel(iteration.result)}
-            </span>
+          <div className="flex items-center gap-4">
+            <span className="font-medium">Iteration {iteration.number}</span>
+            <Badge variant={resultVariant}>{getResultLabel(iteration.result)}</Badge>
           </div>
-          <div className={styles.iterationMeta}>
+          <div className="flex items-center gap-4 text-sm text-[hsl(var(--muted-foreground))]">
             {duration > 0 && (
-              <span className={styles.duration}>{formatDuration(duration)}</span>
+              <span className="flex items-center gap-1">
+                <Clock className="h-4 w-4" />
+                {formatDuration(duration)}
+              </span>
             )}
-            <span className={styles.timestamp}>{formatTimestamp(iteration.startedAt)}</span>
-            <span className={`${styles.expandIcon} ${isExpanded ? styles.expanded : ""}`}>
-              {isExpanded ? "−" : "+"}
-            </span>
+            <span>{formatTimestamp(iteration.startedAt)}</span>
+            {isExpanded ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
           </div>
         </button>
 
         {isExpanded && (
-          <div className={styles.iterationDetails}>
+          <div className="mt-2 space-y-4 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] p-4">
             {/* Error message if present */}
             {iteration.error && (
-              <div className={styles.errorSection}>
-                <span className={styles.sectionLabel}>Error</span>
-                <div className={styles.errorContent}>{iteration.error}</div>
+              <div>
+                <span className="text-sm font-medium text-[hsl(var(--destructive))]">
+                  Error
+                </span>
+                <div className="mt-1 rounded-md bg-[hsl(var(--destructive)/0.1)] p-3 text-sm">
+                  {iteration.error}
+                </div>
               </div>
             )}
 
             {/* Output section */}
             {iteration.output && (
-              <div className={styles.outputSection}>
-                <span className={styles.sectionLabel}>Output</span>
-                <div className={styles.outputContent}>{iteration.output}</div>
+              <div>
+                <span className="text-sm font-medium">Output</span>
+                <ScrollArea className="mt-1 h-40 rounded-md bg-[hsl(var(--muted))] p-3 font-mono text-sm">
+                  {iteration.output}
+                </ScrollArea>
               </div>
             )}
 
             {/* Files changed */}
             {iteration.filesChanged.length > 0 && (
-              <div className={styles.filesSection}>
-                <span className={styles.sectionLabel}>
+              <div>
+                <span className="text-sm font-medium">
                   Files Changed ({iteration.filesChanged.length})
                 </span>
-                <ul className={styles.filesList}>
+                <ul className="mt-2 space-y-1">
                   {iteration.filesChanged.map((file) => (
-                    <li key={file} className={styles.fileItem}>
+                    <li
+                      key={file}
+                      className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]"
+                    >
+                      <FileText className="h-4 w-4" />
                       {file}
                     </li>
                   ))}
@@ -237,25 +328,24 @@ function IterationItem({ iteration, isExpanded, onToggle, isFirst, isLast }: Ite
 
             {/* Commit link */}
             {iteration.commitHash && (
-              <div className={styles.commitSection}>
-                <span className={styles.sectionLabel}>Commit</span>
-                <code className={styles.commitHash}>{iteration.commitHash}</code>
+              <div>
+                <span className="text-sm font-medium">Commit</span>
+                <div className="mt-1 flex items-center gap-2">
+                  <GitCommit className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+                  <code className="rounded bg-[hsl(var(--muted))] px-2 py-1 text-sm">
+                    {iteration.commitHash}
+                  </code>
+                </div>
               </div>
             )}
 
             {/* Timestamps */}
-            <div className={styles.timestampsSection}>
-              <span className={styles.sectionLabel}>Timeline</span>
-              <div className={styles.timestamps}>
-                <div className={styles.timestampRow}>
-                  <span className={styles.timestampLabel}>Started:</span>
-                  <span>{formatTimestamp(iteration.startedAt)}</span>
-                </div>
+            <div>
+              <span className="text-sm font-medium">Timeline</span>
+              <div className="mt-1 space-y-1 text-sm text-[hsl(var(--muted-foreground))]">
+                <div>Started: {formatTimestamp(iteration.startedAt)}</div>
                 {iteration.endedAt && (
-                  <div className={styles.timestampRow}>
-                    <span className={styles.timestampLabel}>Ended:</span>
-                    <span>{formatTimestamp(iteration.endedAt)}</span>
-                  </div>
+                  <div>Ended: {formatTimestamp(iteration.endedAt)}</div>
                 )}
               </div>
             </div>
@@ -298,34 +388,28 @@ function IterationTimeline({ iterations }: IterationTimelineProps) {
 
   if (iterations.length === 0) {
     return (
-      <div className={styles.emptyTimeline}>
-        <p>No iterations recorded yet.</p>
-      </div>
+      <Card>
+        <CardContent className="py-8 text-center text-[hsl(var(--muted-foreground))]">
+          No iterations recorded yet.
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <div className={styles.timeline}>
-      <div className={styles.timelineHeader}>
-        <h2 className={styles.timelineTitle}>Iteration History</h2>
-        <div className={styles.timelineActions}>
-          <button
-            type="button"
-            className={styles.toggleButton}
-            onClick={expandAll}
-          >
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Iteration History</h2>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={expandAll}>
             Expand All
-          </button>
-          <button
-            type="button"
-            className={styles.toggleButton}
-            onClick={collapseAll}
-          >
+          </Button>
+          <Button variant="outline" size="sm" onClick={collapseAll}>
             Collapse All
-          </button>
+          </Button>
         </div>
       </div>
-      <div className={styles.timelineList}>
+      <div>
         {iterations.map((iteration, idx) => (
           <IterationItem
             key={iteration.number}
@@ -346,9 +430,9 @@ function IterationTimeline({ iterations }: IterationTimelineProps) {
  */
 function LoadingState() {
   return (
-    <div className={styles.loading}>
-      <span className={styles.spinner} />
-      <p>Loading history...</p>
+    <div className="flex flex-col items-center justify-center py-16">
+      <Loader2 className="mb-4 h-8 w-8 animate-spin text-[hsl(var(--primary))]" />
+      <p className="text-[hsl(var(--muted-foreground))]">Loading history...</p>
     </div>
   );
 }
@@ -358,15 +442,15 @@ function LoadingState() {
  */
 function NotFoundState() {
   return (
-    <div className={styles.notFound}>
-      <div className={styles.notFoundIcon}>&#128269;</div>
-      <h2 className={styles.notFoundTitle}>Task Not Found</h2>
-      <p className={styles.notFoundText}>
+    <div className="flex flex-col items-center justify-center py-16">
+      <Search className="mb-4 h-12 w-12 text-[hsl(var(--muted-foreground))]" />
+      <h2 className="text-xl font-bold">Task Not Found</h2>
+      <p className="mt-2 text-[hsl(var(--muted-foreground))]">
         The requested task could not be found.
       </p>
-      <Link to="/" className={styles.primaryButton}>
-        Back to Dashboard
-      </Link>
+      <Button asChild className="mt-6">
+        <Link to="/">Back to Dashboard</Link>
+      </Button>
     </div>
   );
 }
@@ -384,38 +468,38 @@ function NoHistoryState({ task, onRetry, isLoading }: NoHistoryStateProps) {
   const canRetry = task.status === "pending" || task.status === "failed";
 
   return (
-    <div className={styles.noHistory}>
-      <div className={styles.noHistoryIcon}>&#128196;</div>
-      <h3 className={styles.noHistoryTitle}>No Battle History</h3>
-      <p className={styles.noHistoryText}>
-        This task hasn&apos;t been executed yet, or no history was recorded.
-      </p>
-      <div className={styles.noHistoryActions}>
-        {canRetry && (
-          <button
-            type="button"
-            className={styles.primaryButton}
-            onClick={onRetry}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <span className={styles.spinner} />
-                Starting...
-              </>
-            ) : (
-              "Start Battle"
-            )}
-          </button>
-        )}
-        <Link to={`/task/${encodeURIComponent(task.id)}`} className={styles.secondaryButton}>
-          Go to Battle
-        </Link>
-        <Link to="/" className={styles.secondaryButton}>
-          Back to Dashboard
-        </Link>
-      </div>
-    </div>
+    <Card>
+      <CardContent className="flex flex-col items-center py-12">
+        <FileText className="mb-4 h-12 w-12 text-[hsl(var(--muted-foreground))]" />
+        <h3 className="text-lg font-semibold">No Battle History</h3>
+        <p className="mt-2 text-center text-[hsl(var(--muted-foreground))]">
+          This task hasn't been executed yet, or no history was recorded.
+        </p>
+        <div className="mt-6 flex gap-2">
+          {canRetry && (
+            <Button onClick={onRetry} disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Starting...
+                </>
+              ) : (
+                <>
+                  <Play className="mr-2 h-4 w-4" />
+                  Start Battle
+                </>
+              )}
+            </Button>
+          )}
+          <Button variant="outline" asChild>
+            <Link to={`/task/${encodeURIComponent(task.id)}`}>Go to Battle</Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link to="/">Back to Dashboard</Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -452,11 +536,9 @@ export function History() {
       setIsLoading(true);
 
       try {
-        // Load task
         const loadedTask = await getTask(taskId);
         setTask(loadedTask);
 
-        // Load history
         try {
           const historyResponse = await getBattleHistory(taskId);
           if (historyResponse.history) {
@@ -467,7 +549,6 @@ export function History() {
           // History might not exist yet - that's okay
         }
       } catch {
-        // Task not found
         setTask(null);
       } finally {
         setIsLoading(false);
@@ -479,7 +560,10 @@ export function History() {
 
   // Sync from store
   useEffect(() => {
-    if (storeHistory && (!history || storeHistory.iterations.length > history.iterations.length)) {
+    if (
+      storeHistory &&
+      (!history || storeHistory.iterations.length > history.iterations.length)
+    ) {
       setHistory(storeHistory);
     }
   }, [storeHistory, history]);
@@ -493,7 +577,6 @@ export function History() {
     try {
       await startBattle(taskId, "hitl");
       updateTask(taskId, { status: TaskStatus.InProgress });
-      // Navigate to battle view
       window.location.href = `/task/${encodeURIComponent(taskId)}`;
     } catch (err) {
       console.error("Failed to start battle:", err);
@@ -513,45 +596,50 @@ export function History() {
   }
 
   return (
-    <div className={styles.history}>
+    <div className="space-y-6">
       {/* Task header with stats */}
       <TaskHeader task={task} battle={history} />
 
       {/* Navigation */}
-      <div className={styles.navigation}>
-        <Link to={`/task/${encodeURIComponent(task.id)}`} className={styles.navLink}>
-          &larr; Battle View
-        </Link>
-        <Link to="/" className={styles.navLink}>
-          Dashboard
-        </Link>
+      <div className="flex gap-4">
+        <Button variant="outline" size="sm" asChild>
+          <Link to={`/task/${encodeURIComponent(task.id)}`}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Battle View
+          </Link>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/">Dashboard</Link>
+        </Button>
       </div>
 
       {/* Timeline or empty state */}
       {history && history.iterations.length > 0 ? (
         <IterationTimeline iterations={history.iterations} />
       ) : (
-        <NoHistoryState task={task} onRetry={handleRetry} isLoading={isActionLoading} />
+        <NoHistoryState
+          task={task}
+          onRetry={handleRetry}
+          isLoading={isActionLoading}
+        />
       )}
 
       {/* Retry button for failed tasks */}
       {history && task.status === "failed" && (
-        <div className={styles.retrySection}>
-          <button
-            type="button"
-            className={styles.retryButton}
-            onClick={handleRetry}
-            disabled={isActionLoading}
-          >
+        <div className="flex justify-center">
+          <Button onClick={handleRetry} disabled={isActionLoading}>
             {isActionLoading ? (
               <>
-                <span className={styles.spinner} />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Retrying...
               </>
             ) : (
-              "Retry Task"
+              <>
+                <Play className="mr-2 h-4 w-4" />
+                Retry Task
+              </>
             )}
-          </button>
+          </Button>
         </div>
       )}
     </div>

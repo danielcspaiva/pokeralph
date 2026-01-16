@@ -6,9 +6,30 @@
  */
 
 import { useState, useEffect } from "react";
-import { useWorkingDir, useHasPokeralphFolder, useAppStore } from "../stores/app-store";
+import { FolderOpen, Folder, Pencil } from "lucide-react";
+import {
+  useWorkingDir,
+  useHasPokeralphFolder,
+  useAppStore,
+} from "../stores/app-store";
 import { getWorkingDir, setWorkingDir } from "../api/client";
-import styles from "./RepoSelector.module.css";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 /**
  * Repository selector component
@@ -68,117 +89,86 @@ export function RepoSelector() {
     }
   };
 
-  const handleCancel = () => {
-    setIsOpen(false);
-    setError(null);
-  };
-
-  const handleOverlayKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
-      handleCancel();
-    }
-  };
-
   // Display a shortened path for the button
   const displayPath = currentWorkingDir
     ? currentWorkingDir.split("/").slice(-2).join("/")
     : "No repository";
 
   return (
-    <>
-      <button
-        type="button"
-        className={styles.selector}
-        onClick={() => setIsOpen(true)}
-        title={currentWorkingDir ?? "Select repository"}
-      >
-        <span className={styles.folderIcon}>
-          {hasPokeralphFolder ? "\uD83D\uDCC2" : "\uD83D\uDCC1"}
-        </span>
-        <span className={styles.path}>{displayPath}</span>
-        <span className={styles.editIcon}>{"\u270F"}</span>
-      </button>
-
-      {isOpen && (
-        <div className={styles.overlay}>
-          <button
-            type="button"
-            className={styles.backdropButton}
-            onClick={handleCancel}
-            onKeyDown={handleOverlayKeyDown}
-            aria-label="Close modal"
-          />
-          <dialog
-            className={styles.modal}
-            open
-            aria-labelledby="repo-modal-title"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            <div className={styles.header}>
-              <h2 id="repo-modal-title" className={styles.title}>
-                Select Repository
-              </h2>
-              <button
-                type="button"
-                className={styles.closeButton}
-                onClick={handleCancel}
-                aria-label="Close"
-              >
-                &times;
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} className={styles.content}>
-              {error && <div className={styles.errorBanner}>{error}</div>}
-
-              <div className={styles.formGroup}>
-                <label htmlFor="repoPath" className={styles.label}>
-                  Repository Path
-                </label>
-                <input
-                  type="text"
-                  id="repoPath"
-                  value={inputPath}
-                  onChange={(e) => setInputPath(e.target.value)}
-                  className={styles.input}
-                  placeholder="/path/to/your/repository"
-                  disabled={isLoading}
-                />
-                <span className={styles.hint}>
-                  Enter the absolute path to your project directory.
-                  A .pokeralph folder will be created if it doesn't exist.
-                </span>
-              </div>
-
-              {currentWorkingDir && (
-                <div className={styles.currentPath}>
-                  <span className={styles.currentLabel}>Current:</span>
-                  <code className={styles.currentValue}>{currentWorkingDir}</code>
-                </div>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DialogTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="max-w-[200px] gap-2"
+            >
+              {hasPokeralphFolder ? (
+                <FolderOpen className="h-4 w-4 shrink-0" />
+              ) : (
+                <Folder className="h-4 w-4 shrink-0" />
               )}
+              <span className="truncate">{displayPath}</span>
+              <Pencil className="h-3 w-3 shrink-0 opacity-50" />
+            </Button>
+          </DialogTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{currentWorkingDir ?? "Select repository"}</TooltipContent>
+      </Tooltip>
 
-              <div className={styles.footer}>
-                <button
-                  type="button"
-                  className={styles.cancelButton}
-                  onClick={handleCancel}
-                  disabled={isLoading}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className={styles.saveButton}
-                  disabled={isLoading}
-                >
-                  {isLoading ? "Switching..." : "Switch Repository"}
-                </button>
-              </div>
-            </form>
-          </dialog>
-        </div>
-      )}
-    </>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Select Repository</DialogTitle>
+          <DialogDescription>
+            Enter the absolute path to your project directory. A .pokeralph
+            folder will be created if it doesn't exist.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="rounded-md bg-[hsl(var(--destructive)/0.1)] p-3 text-sm text-[hsl(var(--destructive))]">
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="repoPath">Repository Path</Label>
+            <Input
+              type="text"
+              id="repoPath"
+              value={inputPath}
+              onChange={(e) => setInputPath(e.target.value)}
+              placeholder="/path/to/your/repository"
+              disabled={isLoading}
+            />
+          </div>
+
+          {currentWorkingDir && (
+            <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+              <span>Current:</span>
+              <code className="rounded bg-[hsl(var(--muted))] px-2 py-1 text-xs">
+                {currentWorkingDir}
+              </code>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsOpen(false)}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? "Switching..." : "Switch Repository"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

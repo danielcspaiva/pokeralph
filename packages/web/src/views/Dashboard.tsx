@@ -7,6 +7,7 @@
 
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Plus, Play, ClipboardList, Loader2 } from "lucide-react";
 import {
   usePRD,
   useTasks,
@@ -14,10 +15,14 @@ import {
   useNextPendingTask,
   useIsBattleRunning,
   useAppStore,
-} from "@/stores/app-store.ts";
-import { getPRD, startBattle } from "@/api/client.ts";
+} from "@/stores/app-store";
+import { getPRD, startBattle } from "@/api/client";
 import type { Task } from "@pokeralph/core/types";
-import styles from "./Dashboard.module.css";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 
 /**
  * Filter options for task list
@@ -35,7 +40,10 @@ interface FilterConfig {
 const filterConfigs: Record<TaskFilter, FilterConfig> = {
   all: { label: "All", filter: () => true },
   pending: { label: "Pending", filter: (t) => t.status === "pending" },
-  in_progress: { label: "In Progress", filter: (t) => t.status === "in_progress" },
+  in_progress: {
+    label: "In Progress",
+    filter: (t) => t.status === "in_progress",
+  },
   completed: { label: "Completed", filter: (t) => t.status === "completed" },
   failed: { label: "Failed", filter: (t) => t.status === "failed" },
 };
@@ -50,11 +58,22 @@ interface StatCardProps {
 }
 
 function StatCard({ label, value, variant = "default" }: StatCardProps) {
+  const colorClass = {
+    default: "text-[hsl(var(--foreground))]",
+    success: "text-[hsl(var(--success))]",
+    warning: "text-[hsl(var(--warning))]",
+    error: "text-[hsl(var(--destructive))]",
+  }[variant];
+
   return (
-    <div className={`${styles.statCard} ${styles[variant]}`}>
-      <span className={styles.statValue}>{value}</span>
-      <span className={styles.statLabel}>{label}</span>
-    </div>
+    <Card>
+      <CardContent className="flex flex-col items-center justify-center p-4">
+        <span className={cn("text-3xl font-bold", colorClass)}>{value}</span>
+        <span className="text-sm text-[hsl(var(--muted-foreground))]">
+          {label}
+        </span>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -66,20 +85,42 @@ interface TaskListItemProps {
 }
 
 function TaskListItem({ task }: TaskListItemProps) {
-  const statusClass = task.status.replace("_", "");
+  const statusToBadgeVariant: Record<string, string> = {
+    pending: "pending",
+    planning: "planning",
+    in_progress: "in_progress",
+    paused: "paused",
+    completed: "completed",
+    failed: "failed",
+  };
+  const statusVariant = statusToBadgeVariant[task.status] ?? "pending";
+  const dotClassMap: Record<string, string> = {
+    pending: "bg-[hsl(var(--muted-foreground))]",
+    planning: "bg-blue-500",
+    in_progress: "bg-[hsl(var(--warning))]",
+    paused: "bg-orange-500",
+    completed: "bg-[hsl(var(--success))]",
+    failed: "bg-[hsl(var(--destructive))]",
+  };
+  const dotClass = dotClassMap[task.status] || "bg-[hsl(var(--muted-foreground))]";
 
   return (
-    <Link to={`/task/${task.id}`} className={styles.taskItem}>
-      <div className={styles.taskInfo}>
-        <span className={`${styles.statusDot} ${styles[statusClass]}`} />
-        <div className={styles.taskDetails}>
-          <span className={styles.taskId}>#{task.priority}</span>
-          <span className={styles.taskTitle}>{task.title}</span>
+    <Link
+      to={`/task/${task.id}`}
+      className="flex items-center justify-between rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4 transition-colors hover:bg-[hsl(var(--accent))]"
+    >
+      <div className="flex items-center gap-3">
+        <span className={cn("h-2 w-2 rounded-full", dotClass)} />
+        <div>
+          <span className="mr-2 text-sm text-[hsl(var(--muted-foreground))]">
+            #{task.priority}
+          </span>
+          <span className="font-medium">{task.title}</span>
         </div>
       </div>
-      <span className={`${styles.statusBadge} ${styles[statusClass]}`}>
+      <Badge variant={statusVariant as "pending" | "planning" | "in_progress" | "paused" | "completed" | "failed"}>
         {task.status.replace("_", " ")}
-      </span>
+      </Badge>
     </Link>
   );
 }
@@ -89,31 +130,21 @@ function TaskListItem({ task }: TaskListItemProps) {
  */
 function EmptyState() {
   return (
-    <div className={styles.emptyState}>
-      <div className={styles.emptyIcon}>
-        <svg
-          width="64"
-          height="64"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          role="img"
-          aria-label="Empty clipboard icon"
-        >
-          <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
-          <rect x="9" y="3" width="6" height="4" rx="1" />
-          <path d="M12 11v6" />
-          <path d="M9 14h6" />
-        </svg>
+    <div className="flex flex-col items-center justify-center py-16">
+      <div className="mb-6 rounded-full bg-[hsl(var(--muted))] p-6">
+        <ClipboardList className="h-12 w-12 text-[hsl(var(--muted-foreground))]" />
       </div>
-      <h2 className={styles.emptyTitle}>No Project Yet</h2>
-      <p className={styles.emptyDescription}>
-        Start by describing your idea and Claude will help you create a plan with actionable tasks.
+      <h2 className="mb-2 text-2xl font-semibold">No Project Yet</h2>
+      <p className="mb-6 max-w-md text-center text-[hsl(var(--muted-foreground))]">
+        Start by describing your idea and Claude will help you create a plan
+        with actionable tasks.
       </p>
-      <Link to="/planning" className={styles.ctaButton}>
-        Start Planning
-      </Link>
+      <Button asChild size="lg">
+        <Link to="/planning">
+          <Plus className="mr-2 h-5 w-5" />
+          Start Planning
+        </Link>
+      </Button>
     </div>
   );
 }
@@ -171,9 +202,9 @@ export function Dashboard() {
   // Show loading state
   if (isLoading) {
     return (
-      <div className={styles.loading}>
-        <span className={styles.spinner} />
-        <p>Loading project...</p>
+      <div className="flex flex-col items-center justify-center py-16">
+        <Loader2 className="mb-4 h-8 w-8 animate-spin text-[hsl(var(--primary))]" />
+        <p className="text-[hsl(var(--muted-foreground))]">Loading project...</p>
       </div>
     );
   }
@@ -184,38 +215,49 @@ export function Dashboard() {
   }
 
   return (
-    <div className={styles.dashboard}>
+    <div className="space-y-6">
       {/* Project header */}
-      <div className={styles.header}>
-        <div className={styles.projectInfo}>
-          <h1 className={styles.projectName}>{prd.name}</h1>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">{prd.name}</h1>
           {prd.description && (
-            <p className={styles.projectDescription}>{prd.description}</p>
+            <p className="mt-1 text-[hsl(var(--muted-foreground))]">
+              {prd.description}
+            </p>
           )}
         </div>
-        <div className={styles.actions}>
-          <Link to="/planning" className={styles.secondaryButton}>
-            New Idea
-          </Link>
-          <button
-            type="button"
-            className={styles.primaryButton}
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link to="/planning">
+              <Plus className="mr-2 h-4 w-4" />
+              New Idea
+            </Link>
+          </Button>
+          <Button
             onClick={handleStartBattle}
             disabled={!nextTask || isBattleRunning || isStartingBattle}
           >
-            {isStartingBattle
-              ? "Starting..."
-              : isBattleRunning
-                ? "Battle in Progress"
-                : nextTask
-                  ? "Start Next Battle"
-                  : "No Tasks Pending"}
-          </button>
+            {isStartingBattle ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Starting...
+              </>
+            ) : isBattleRunning ? (
+              "Battle in Progress"
+            ) : nextTask ? (
+              <>
+                <Play className="mr-2 h-4 w-4" />
+                Start Next Battle
+              </>
+            ) : (
+              "No Tasks Pending"
+            )}
+          </Button>
         </div>
       </div>
 
       {/* Stats row */}
-      <div className={styles.stats}>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <StatCard label="Total" value={counts.total} />
         <StatCard label="Pending" value={counts.pending} />
         <StatCard label="In Progress" value={counts.in_progress} variant="warning" />
@@ -224,40 +266,41 @@ export function Dashboard() {
       </div>
 
       {/* Task filters */}
-      <div className={styles.filters}>
-        {(Object.keys(filterConfigs) as TaskFilter[]).map((filter) => (
-          <button
-            key={filter}
-            type="button"
-            className={`${styles.filterButton} ${
-              activeFilter === filter ? styles.active : ""
-            }`}
-            onClick={() => setActiveFilter(filter)}
-          >
-            {filterConfigs[filter].label}
-            {filter !== "all" && (
-              <span className={styles.filterCount}>
-                {filter === "pending"
-                  ? counts.pending
-                  : filter === "in_progress"
-                    ? counts.in_progress
-                    : filter === "completed"
-                      ? counts.completed
-                      : counts.failed}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={activeFilter}
+        onValueChange={(v) => setActiveFilter(v as TaskFilter)}
+      >
+        <TabsList>
+          {(Object.keys(filterConfigs) as TaskFilter[]).map((filter) => (
+            <TabsTrigger key={filter} value={filter} className="gap-2">
+              {filterConfigs[filter].label}
+              {filter !== "all" && (
+                <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-xs">
+                  {filter === "pending"
+                    ? counts.pending
+                    : filter === "in_progress"
+                      ? counts.in_progress
+                      : filter === "completed"
+                        ? counts.completed
+                        : counts.failed}
+                </Badge>
+              )}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {/* Task list */}
-      <div className={styles.taskList}>
+      <div className="space-y-2">
         {filteredTasks.length > 0 ? (
           filteredTasks.map((task) => <TaskListItem key={task.id} task={task} />)
         ) : (
-          <div className={styles.noTasks}>
-            <p>No {activeFilter === "all" ? "" : activeFilter.replace("_", " ")} tasks found.</p>
-          </div>
+          <Card>
+            <CardContent className="py-8 text-center text-[hsl(var(--muted-foreground))]">
+              No {activeFilter === "all" ? "" : activeFilter.replace("_", " ")}{" "}
+              tasks found.
+            </CardContent>
+          </Card>
         )}
       </div>
     </div>
