@@ -9,7 +9,8 @@ import type { ReactNode } from "react";
 import { useState, useEffect } from "react";
 import { Sidebar } from "./Sidebar.tsx";
 import { Header } from "./Header.tsx";
-import { connect, setupWebSocketListeners } from "@/stores";
+import { connect, setupWebSocketListeners, useAppStore } from "@/stores";
+import { getPRD } from "@/api/client.ts";
 import styles from "./Layout.module.css";
 
 interface LayoutProps {
@@ -22,17 +23,33 @@ interface LayoutProps {
  */
 export function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const setPRD = useAppStore((state) => state.setPRD);
 
-  // Initialize WebSocket connection on mount
+  // Initialize WebSocket connection and load PRD on mount
   useEffect(() => {
     console.log("[PokéRalph][Layout] Initializing WebSocket connection...");
     connect();
     const cleanup = setupWebSocketListeners();
+
+    // Load PRD if not already in store
+    async function loadPRD() {
+      console.log("[PokéRalph][Layout] Loading PRD...");
+      try {
+        const prd = await getPRD();
+        console.log("[PokéRalph][Layout] PRD loaded:", prd?.name);
+        setPRD(prd);
+      } catch (err) {
+        console.log("[PokéRalph][Layout] No PRD found:", err);
+        // PRD might not exist yet - that's okay
+      }
+    }
+    loadPRD();
+
     return () => {
       console.log("[PokéRalph][Layout] Cleaning up WebSocket...");
       cleanup();
     };
-  }, []);
+  }, [setPRD]);
 
   const toggleSidebar = () => setSidebarOpen((prev) => !prev);
 
