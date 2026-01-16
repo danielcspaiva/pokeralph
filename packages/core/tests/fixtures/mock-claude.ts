@@ -21,7 +21,9 @@ const customOutput = process.env.MOCK_CLAUDE_OUTPUT ?? "";
 const exitCode = Number.parseInt(process.env.MOCK_CLAUDE_EXIT_CODE ?? "0", 10);
 
 // Parse arguments
-const hasPlan = args.includes("--plan");
+// Check for --permission-mode plan (used by ClaudeBridge for plan mode)
+const permissionModeIndex = args.indexOf("--permission-mode");
+const hasPlan = permissionModeIndex !== -1 && args[permissionModeIndex + 1] === "plan";
 const _hasPrint = args.includes("--print");
 const hasSkipPermissions = args.includes("--dangerously-skip-permissions");
 

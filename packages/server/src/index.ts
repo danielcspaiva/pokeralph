@@ -102,6 +102,36 @@ export function getOrchestrator(): Orchestrator | null {
 }
 
 /**
+ * Switches to a new working directory by recreating the orchestrator
+ *
+ * @param newWorkingDir - The new working directory path
+ * @throws Error if the path doesn't exist or isn't a directory
+ */
+export async function switchOrchestrator(newWorkingDir: string): Promise<Orchestrator> {
+  console.log(`[Server] Switching orchestrator to: ${newWorkingDir}`);
+
+  // Cleanup old orchestrator if it exists
+  if (state.orchestrator) {
+    console.log("[Server] Cleaning up old orchestrator...");
+    await state.orchestrator.cleanup();
+  }
+
+  // Create new orchestrator
+  const newOrchestrator = Orchestrator.create(newWorkingDir);
+  state.orchestrator = newOrchestrator;
+
+  // Initialize the .pokeralph folder structure
+  await newOrchestrator.init();
+
+  // Reset WebSocket manager with new orchestrator
+  const wsManager = getWebSocketManager();
+  wsManager.resetOrchestrator(newOrchestrator);
+
+  console.log(`[Server] Orchestrator switched to: ${newWorkingDir}`);
+  return newOrchestrator;
+}
+
+/**
  * Graceful shutdown handler
  */
 async function shutdown(signal: string): Promise<void> {

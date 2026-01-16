@@ -1,7 +1,8 @@
 import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { mkdirSync, rmSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   createApp,
   initializeOrchestrator,
@@ -9,11 +10,20 @@ import {
   resetServerState,
 } from "../src/index.ts";
 
+// Path to mock Claude script for testing
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const MOCK_CLAUDE_PATH = `bun ${join(__dirname, "../../core/tests/fixtures/mock-claude.ts")}`;
+
 describe("Planning Routes", () => {
   let tempDir: string;
   let app: ReturnType<typeof createApp>;
+  let originalClaudePath: string | undefined;
 
   beforeEach(async () => {
+    // Use mock Claude for testing
+    originalClaudePath = process.env.CLAUDE_PATH;
+    process.env.CLAUDE_PATH = MOCK_CLAUDE_PATH;
+
     // Create unique temp directory for each test
     tempDir = join(
       tmpdir(),
@@ -51,6 +61,13 @@ describe("Planning Routes", () => {
 
     // Reset server state
     resetServerState();
+
+    // Restore original CLAUDE_PATH
+    if (originalClaudePath !== undefined) {
+      process.env.CLAUDE_PATH = originalClaudePath;
+    } else {
+      process.env.CLAUDE_PATH = undefined as unknown as string;
+    }
   });
 
   // ==========================================================================

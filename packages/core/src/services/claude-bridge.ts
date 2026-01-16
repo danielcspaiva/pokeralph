@@ -109,7 +109,8 @@ export class ClaudeBridge {
     this.options = {
       workingDir: options.workingDir,
       timeoutMs: options.timeoutMs ?? 1800000, // 30 minutes default
-      claudePath: options.claudePath ?? "claude",
+      // Allow override via CLAUDE_PATH env var for testing
+      claudePath: options.claudePath ?? process.env.CLAUDE_PATH ?? "claude",
       acceptEdits: options.acceptEdits ?? true,
     };
   }
@@ -266,6 +267,28 @@ export class ClaudeBridge {
     this.exitCallbacks = [];
     this.outputCallbacks = [];
     this.errorCallbacks = [];
+  }
+
+  /**
+   * Full cleanup - kills process, clears callbacks, resets all state
+   *
+   * @remarks
+   * Use this when switching repositories or shutting down the orchestrator.
+   * After calling cleanup(), the bridge is ready to be discarded.
+   */
+  cleanup(): void {
+    // Kill any running process
+    this.kill();
+
+    // Clear all callbacks
+    this.clearCallbacks();
+
+    // Reset buffers
+    this.stdoutBuffer = "";
+    this.stderrBuffer = "";
+
+    // Reset flags
+    this.exitHandledByTimeout = false;
   }
 
   // ==========================================================================

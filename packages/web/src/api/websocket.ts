@@ -50,6 +50,8 @@ export type WebSocketEventType =
   // Approval events (HITL)
   | "await_approval"
   | "approval_received"
+  // Repository events
+  | "repo_changed"
   // System events
   | "error";
 
@@ -176,6 +178,11 @@ export interface ErrorPayload {
   details?: unknown;
 }
 
+/** Repo changed payload */
+export interface RepoChangedPayload {
+  workingDir: string;
+}
+
 // ==========================================================================
 // Event Listener Types
 // ==========================================================================
@@ -201,6 +208,7 @@ export interface WebSocketEventPayloads {
   feedback_result: FeedbackResultPayload;
   await_approval: AwaitApprovalPayload;
   approval_received: ApprovalReceivedPayload;
+  repo_changed: RepoChangedPayload;
   error: ErrorPayload;
 }
 

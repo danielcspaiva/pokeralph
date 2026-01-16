@@ -40,6 +40,8 @@ export type WebSocketEventType =
   // Approval events (HITL)
   | "await_approval"
   | "approval_received"
+  // Repository events
+  | "repo_changed"
   // System events
   | "error"
   | "connected"
@@ -352,6 +354,27 @@ export class WebSocketManager {
 
     this.clients.clear();
     this.orchestrator = null;
+  }
+
+  /**
+   * Resets the orchestrator with a new instance
+   *
+   * @remarks
+   * Use this when switching repositories. Clears old event listeners
+   * and sets up new ones with the new orchestrator.
+   */
+  resetOrchestrator(newOrchestrator: Orchestrator): void {
+    // Clear reference to old orchestrator (event listeners will be garbage collected
+    // when the old orchestrator is discarded)
+    this.orchestrator = null;
+
+    // Setup new orchestrator with fresh event listeners
+    this.setupOrchestrator(newOrchestrator);
+
+    // Broadcast repo_changed event to all clients
+    this.broadcast("repo_changed", {
+      workingDir: newOrchestrator.getWorkingDir(),
+    });
   }
 }
 

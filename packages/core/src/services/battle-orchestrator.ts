@@ -382,6 +382,29 @@ export class BattleOrchestrator extends EventEmitter {
     };
   }
 
+  /**
+   * Full cleanup - cancels any running battle and clears all state
+   *
+   * @remarks
+   * Use this when switching repositories or shutting down the orchestrator.
+   * After calling cleanup(), the BattleOrchestrator is ready to be discarded.
+   */
+  async cleanup(): Promise<void> {
+    // Cancel any running battle
+    if (this.state !== null) {
+      await this.cancel("Repository switch - cleanup");
+    }
+
+    // Stop progress watcher if running
+    this.deps.progressWatcher.stop();
+
+    // Remove all event listeners
+    this.removeAllListeners();
+
+    // Clear state
+    this.state = null;
+  }
+
   // ==========================================================================
   // Battle Loop
   // ==========================================================================

@@ -437,7 +437,7 @@ export function Planning() {
   useEffect(() => {
     console.log("[PokéRalph][Planning] planningOutput changed", {
       length: planningOutput.length,
-      outputs: planningOutput.map((o) => o.substring(0, 50) + "..."),
+      outputs: planningOutput.map((o) => `${o.substring(0, 50)}...`),
     });
 
     if (planningOutput.length === 0) return;
@@ -456,7 +456,7 @@ export function Planning() {
           timestamp: new Date(),
         });
         console.log("[PokéRalph][Planning] Adding new Claude message", {
-          preview: output.substring(0, 100) + "...",
+          preview: `${output.substring(0, 100)}...`,
         });
       }
     }

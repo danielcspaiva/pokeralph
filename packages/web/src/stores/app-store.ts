@@ -28,7 +28,7 @@ import type {
   Battle,
   ExecutionMode,
 } from "@pokeralph/core";
-import { TaskStatus } from "../constants/task-status.ts";
+import { TaskStatus } from "@pokeralph/core";
 import {
   getWebSocketClient,
   type WebSocketEventPayloads,
@@ -73,6 +73,10 @@ export interface AppState {
   isConnected: boolean;
   connectionId: string | null;
 
+  // Working directory
+  workingDir: string | null;
+  hasPokeralphFolder: boolean;
+
   // Configuration
   config: Config | null;
 
@@ -95,6 +99,9 @@ export interface AppState {
 export interface AppActions {
   // Connection actions
   setConnected: (connected: boolean, connectionId?: string | null) => void;
+
+  // Working directory actions
+  setWorkingDir: (workingDir: string, hasPokeralphFolder?: boolean) => void;
 
   // Config actions
   setConfig: (config: Config) => void;
@@ -138,6 +145,10 @@ const initialState: AppState = {
   isConnected: false,
   connectionId: null,
 
+  // Working directory
+  workingDir: null,
+  hasPokeralphFolder: false,
+
   // Config
   config: null,
 
@@ -179,6 +190,13 @@ export const useAppStore = create<AppStore>()(
 
       setConnected: (connected, connectionId = null) =>
         set({ isConnected: connected, connectionId }),
+
+      // ==================================================================
+      // Working Directory Actions
+      // ==================================================================
+
+      setWorkingDir: (workingDir, hasPokeralphFolder = true) =>
+        set({ workingDir, hasPokeralphFolder }),
 
       // ==================================================================
       // Config Actions
@@ -320,6 +338,16 @@ export const useIsConnected = () => useAppStore((state) => state.isConnected);
  * Select connection ID
  */
 export const useConnectionId = () => useAppStore((state) => state.connectionId);
+
+/**
+ * Select working directory
+ */
+export const useWorkingDir = () => useAppStore((state) => state.workingDir);
+
+/**
+ * Select if .pokeralph folder exists
+ */
+export const useHasPokeralphFolder = () => useAppStore((state) => state.hasPokeralphFolder);
 
 /**
  * Select configuration
@@ -707,6 +735,29 @@ export function setupWebSocketListeners(): () => void {
     }));
   };
 
+  // Handler for repo changed
+  const handleRepoChanged = (
+    payload: WebSocketEventPayloads["repo_changed"],
+    _timestamp: string
+  ) => {
+    // Update working directory and reset PRD/tasks/planning state
+    useAppStore.setState({
+      workingDir: payload.workingDir,
+      hasPokeralphFolder: true,
+      // Clear data from previous repo
+      prd: null,
+      tasks: [],
+      currentBattle: null,
+      battleProgress: {},
+      battleHistory: {},
+      planningSession: {
+        state: "idle",
+        pendingQuestion: null,
+        conversationOutput: [],
+      },
+    });
+  };
+
   // Register all listeners
   wsClient.on("connected", handleConnected);
   wsClient.on("planning_output", handlePlanningOutput);
@@ -723,6 +774,7 @@ export function setupWebSocketListeners(): () => void {
   wsClient.on("progress_update", handleProgressUpdate);
   wsClient.on("await_approval", handleAwaitApproval);
   wsClient.on("approval_received", handleApprovalReceived);
+  wsClient.on("repo_changed", handleRepoChanged);
 
   // Return cleanup function
   return () => {
@@ -741,5 +793,6 @@ export function setupWebSocketListeners(): () => void {
     wsClient.off("progress_update", handleProgressUpdate);
     wsClient.off("await_approval", handleAwaitApproval);
     wsClient.off("approval_received", handleApprovalReceived);
+    wsClient.off("repo_changed", handleRepoChanged);
   };
 }

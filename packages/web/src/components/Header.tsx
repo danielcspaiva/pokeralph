@@ -7,6 +7,7 @@
 import { useState } from "react";
 import { usePRD, useConfig, useIsConnected } from "@/stores/app-store.ts";
 import { ConfigModal } from "./ConfigModal.tsx";
+import { RepoSelector } from "./RepoSelector.tsx";
 import styles from "./Header.module.css";
 
 interface HeaderProps {
@@ -44,6 +45,8 @@ export function Header({ onMenuClick, sidebarOpen }: HeaderProps) {
         </div>
 
         <div className={styles.right}>
+          <RepoSelector />
+
           <div
             className={`${styles.connectionStatus} ${isConnected ? styles.connected : styles.disconnected}`}
             title={isConnected ? "Connected to server" : "Disconnected"}

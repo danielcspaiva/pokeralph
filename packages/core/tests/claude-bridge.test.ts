@@ -124,7 +124,7 @@ describe("ClaudeBridge", () => {
   // ============================================================================
 
   describe("buildCommand", () => {
-    test("builds plan mode command with --plan flag", () => {
+    test("builds plan mode command with --permission-mode plan", () => {
       const bridge = new ClaudeBridge({
         workingDir: tempDir,
         claudePath: "claude",
@@ -133,7 +133,8 @@ describe("ClaudeBridge", () => {
       const cmd = bridge.buildCommand("plan", "Test prompt");
 
       expect(cmd).toContain("claude");
-      expect(cmd).toContain("--plan");
+      expect(cmd).toContain("--permission-mode");
+      expect(cmd).toContain("plan");
       expect(cmd).toContain("--print");
       expect(cmd).toContain("Test prompt");
     });

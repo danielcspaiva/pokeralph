@@ -255,6 +255,45 @@ export async function updateConfig(config: Partial<Config>): Promise<Config> {
 }
 
 // ==========================================================================
+// Working Directory Endpoints
+// ==========================================================================
+
+/**
+ * Working directory response type
+ */
+export interface WorkingDirResponse {
+  workingDir: string;
+  hasPokeralphFolder: boolean;
+}
+
+/**
+ * Working directory change response type
+ */
+export interface WorkingDirChangeResponse {
+  success: boolean;
+  workingDir: string;
+}
+
+/**
+ * Gets the current working directory
+ */
+export async function getWorkingDir(): Promise<WorkingDirResponse> {
+  return request<WorkingDirResponse>("/api/config/working-dir");
+}
+
+/**
+ * Changes the working directory to a new path
+ *
+ * @param path - The new working directory path (can be relative or absolute)
+ */
+export async function setWorkingDir(path: string): Promise<WorkingDirChangeResponse> {
+  return request<WorkingDirChangeResponse>("/api/config/working-dir", {
+    method: "POST",
+    body: JSON.stringify({ path }),
+  });
+}
+
+// ==========================================================================
 // PRD Endpoints
 // ==========================================================================
 

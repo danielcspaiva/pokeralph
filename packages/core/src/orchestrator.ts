@@ -582,4 +582,38 @@ export class Orchestrator {
       return null;
     }
   }
+
+  // ==========================================================================
+  // Lifecycle Management
+  // ==========================================================================
+
+  /**
+   * Gets the working directory for this orchestrator
+   *
+   * @returns The working directory path
+   */
+  getWorkingDir(): string {
+    return this.workingDir;
+  }
+
+  /**
+   * Full cleanup - stops all running operations and clears all state
+   *
+   * @remarks
+   * Use this when switching repositories or shutting down.
+   * After calling cleanup(), the Orchestrator should be discarded.
+   */
+  async cleanup(): Promise<void> {
+    // Stop any running battle
+    await this.battleOrchestrator.cleanup();
+
+    // Cleanup Claude bridge (kills any running process)
+    this.claudeBridge.cleanup();
+
+    // Stop progress watcher
+    this.progressWatcher.stop();
+
+    // Reset planning state
+    this.planService.reset();
+  }
 }

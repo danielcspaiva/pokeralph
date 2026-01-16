@@ -2,7 +2,8 @@ import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdirSync, rmSync } from "node:fs";
-import app, {
+import {
+  app,
   createApp,
   initializeOrchestrator,
   getOrchestrator,

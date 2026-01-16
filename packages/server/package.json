@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",
+  "bin": {
+    "pokeralph": "./src/cli.ts"
+  },
   "scripts": {
     "build": "echo 'No build step - TypeScript source used directly'",
     "start": "bun run src/index.ts",
