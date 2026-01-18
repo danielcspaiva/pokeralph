@@ -5,7 +5,7 @@
  * and error type handling per spec 11-recovery.md.
  */
 
-import { test, expect, describe } from "bun:test";
+import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import {
   classifyFailure,
   getFailureSeverity,
@@ -907,5 +907,506 @@ describe("getDefaultResumeStrategy", () => {
     failure.suggestedAction = "retry_iteration"; // Even if suggestion is retry
 
     expect(getDefaultResumeStrategy(failure)).toBe("manual_then_continue");
+  });
+});
+
+// =============================================================================
+// Manual Fix Mode Tests (11-recovery.md lines 322-588)
+// =============================================================================
+
+import {
+  startManualFixSession,
+  getManualFixSession,
+  getActiveManualFixSessions,
+  cleanupManualFixSession,
+  cleanupAllManualFixSessions,
+  setManualFixVerificationResults,
+  completeManualFixSession,
+  abortManualFixSession,
+  buildManualFixContext,
+  getActiveWatcherCount,
+  getActiveSessionCount,
+  type FileChange,
+} from "../src/services/recovery-service.ts";
+import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+describe("Manual Fix Mode", () => {
+  let testDir: string;
+
+  beforeEach(async () => {
+    // Create a temp directory for each test
+    testDir = await mkdtemp(join(tmpdir(), "pokeralph-mfm-test-"));
+  });
+
+  afterEach(async () => {
+    // Clean up all sessions to prevent watcher leaks
+    cleanupAllManualFixSessions();
+
+    // Clean up temp directory
+    try {
+      await rm(testDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  describe("startManualFixSession", () => {
+    test("creates a session with correct properties", () => {
+      const failure = createTestFailure("feedback_failure", 3);
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      expect(session.id).toMatch(/^mfs-\d+-[a-z0-9]+$/);
+      expect(session.battleId).toBe("battle-123");
+      expect(session.taskId).toBe("001-test-task");
+      expect(session.workingDir).toBe(testDir);
+      expect(session.startedAt).toBeTruthy();
+      expect(session.issue).toBe(failure);
+      expect(session.detectedChanges).toEqual([]);
+      expect(session.verificationResults).toBeNull();
+      expect(session.verified).toBe(false);
+      expect(session.status).toBe("active");
+    });
+
+    test("increments active watcher count", () => {
+      const initialCount = getActiveWatcherCount();
+      const failure = createTestFailure("feedback_failure", 3);
+
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      expect(getActiveWatcherCount()).toBe(initialCount + 1);
+
+      cleanupManualFixSession(session.id);
+      expect(getActiveWatcherCount()).toBe(initialCount);
+    });
+
+    test("increments active session count", () => {
+      const initialCount = getActiveSessionCount();
+      const failure = createTestFailure("feedback_failure", 3);
+
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      expect(getActiveSessionCount()).toBe(initialCount + 1);
+
+      cleanupManualFixSession(session.id);
+      expect(getActiveSessionCount()).toBe(initialCount);
+    });
+
+    test("detects file changes", async () => {
+      const failure = createTestFailure("feedback_failure", 3);
+      let lastDetectedChange: FileChange | null = null;
+
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+        onChangeDetected: (_, change) => {
+          lastDetectedChange = change;
+        },
+      });
+
+      // Ensure the callback variable is used
+      void lastDetectedChange;
+
+      // Create a test file
+      const testFile = join(testDir, "test-file.ts");
+      await writeFile(testFile, "const x = 1;");
+
+      // Wait for watcher to detect the change
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      expect(session.detectedChanges.length).toBeGreaterThan(0);
+      expect(session.lastChangeDetected).toBeTruthy();
+    });
+
+    test("ignores changes in node_modules", async () => {
+      const failure = createTestFailure("feedback_failure", 3);
+
+      const nodeModulesDir = join(testDir, "node_modules");
+      await mkdir(nodeModulesDir, { recursive: true });
+
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      // Create a file in node_modules
+      const testFile = join(nodeModulesDir, "some-package.js");
+      await writeFile(testFile, "module.exports = 1;");
+
+      // Wait for watcher
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Should not have detected the change
+      const nodeModulesChanges = session.detectedChanges.filter((c) =>
+        c.path.includes("node_modules")
+      );
+      expect(nodeModulesChanges.length).toBe(0);
+    });
+
+    test("ignores changes in .git", async () => {
+      const failure = createTestFailure("feedback_failure", 3);
+
+      const gitDir = join(testDir, ".git");
+      await mkdir(gitDir, { recursive: true });
+
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      // Create a file in .git
+      const testFile = join(gitDir, "index");
+      await writeFile(testFile, "some git data");
+
+      // Wait for watcher
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Should not have detected the change
+      const gitChanges = session.detectedChanges.filter((c) =>
+        c.path.includes(".git")
+      );
+      expect(gitChanges.length).toBe(0);
+    });
+  });
+
+  describe("getManualFixSession", () => {
+    test("returns session by ID", () => {
+      const failure = createTestFailure("feedback_failure", 3);
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      const retrieved = getManualFixSession(session.id);
+
+      expect(retrieved).toBe(session);
+    });
+
+    test("returns undefined for unknown ID", () => {
+      const retrieved = getManualFixSession("unknown-id");
+
+      expect(retrieved).toBeUndefined();
+    });
+  });
+
+  describe("getActiveManualFixSessions", () => {
+    test("returns only active sessions", () => {
+      const failure = createTestFailure("feedback_failure", 3);
+
+      const session1 = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-1",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      const session2 = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-2",
+        taskId: "002-test-task",
+        failure,
+      });
+
+      // Abort one session
+      abortManualFixSession(session1.id);
+
+      const activeSessions = getActiveManualFixSessions();
+
+      expect(activeSessions.length).toBe(1);
+      expect(activeSessions[0]?.id).toBe(session2.id);
+    });
+  });
+
+  describe("cleanupManualFixSession", () => {
+    test("removes session and closes watcher", () => {
+      const failure = createTestFailure("feedback_failure", 3);
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      const initialWatcherCount = getActiveWatcherCount();
+      const initialSessionCount = getActiveSessionCount();
+
+      cleanupManualFixSession(session.id);
+
+      expect(getActiveWatcherCount()).toBe(initialWatcherCount - 1);
+      expect(getActiveSessionCount()).toBe(initialSessionCount - 1);
+      expect(getManualFixSession(session.id)).toBeUndefined();
+    });
+
+    test("handles cleanup of non-existent session gracefully", () => {
+      // Should not throw
+      cleanupManualFixSession("non-existent-id");
+    });
+  });
+
+  describe("cleanupAllManualFixSessions", () => {
+    test("removes all sessions and watchers", () => {
+      const failure = createTestFailure("feedback_failure", 3);
+
+      startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-1",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-2",
+        taskId: "002-test-task",
+        failure,
+      });
+
+      expect(getActiveWatcherCount()).toBeGreaterThan(0);
+      expect(getActiveSessionCount()).toBeGreaterThan(0);
+
+      cleanupAllManualFixSessions();
+
+      expect(getActiveWatcherCount()).toBe(0);
+      expect(getActiveSessionCount()).toBe(0);
+    });
+  });
+
+  describe("setManualFixVerificationResults", () => {
+    test("sets results and marks verified when all pass", () => {
+      const failure = createTestFailure("feedback_failure", 3);
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      const results = {
+        test: { passed: true, output: "5 tests passed", duration: 1000 },
+        lint: { passed: true, output: "No errors", duration: 500 },
+      };
+
+      const verified = setManualFixVerificationResults(session.id, results);
+
+      expect(verified).toBe(true);
+      expect(session.verified).toBe(true);
+      expect(session.verificationResults).toBe(results);
+    });
+
+    test("sets results and marks not verified when any fail", () => {
+      const failure = createTestFailure("feedback_failure", 3);
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      const results = {
+        test: { passed: true, output: "5 tests passed", duration: 1000 },
+        lint: { passed: false, output: "2 errors", duration: 500 },
+      };
+
+      const verified = setManualFixVerificationResults(session.id, results);
+
+      expect(verified).toBe(false);
+      expect(session.verified).toBe(false);
+      expect(session.verificationResults).toBe(results);
+    });
+
+    test("throws for unknown session ID", () => {
+      expect(() => {
+        setManualFixVerificationResults("unknown-id", {});
+      }).toThrow("Manual fix session not found");
+    });
+  });
+
+  describe("completeManualFixSession", () => {
+    test("returns context and cleans up when verified", () => {
+      const failure = createTestFailure("feedback_failure", 3);
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      // Add some detected changes
+      session.detectedChanges.push({
+        path: "src/auth.ts",
+        type: "modified",
+        detectedAt: new Date().toISOString(),
+      });
+
+      // Mark as verified
+      setManualFixVerificationResults(session.id, {
+        test: { passed: true, output: "passed", duration: 100 },
+      });
+
+      const context = completeManualFixSession(session.id);
+
+      expect(context).toContain("## Manual Fix Applied");
+      expect(context).toContain(failure.message);
+      expect(context).toContain("src/auth.ts");
+      expect(getManualFixSession(session.id)).toBeUndefined();
+    });
+
+    test("throws when not verified", () => {
+      const failure = createTestFailure("feedback_failure", 3);
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      expect(() => {
+        completeManualFixSession(session.id);
+      }).toThrow("fix not verified");
+    });
+
+    test("throws for unknown session ID", () => {
+      expect(() => {
+        completeManualFixSession("unknown-id");
+      }).toThrow("Manual fix session not found");
+    });
+  });
+
+  describe("abortManualFixSession", () => {
+    test("marks session as aborted and cleans up", () => {
+      const failure = createTestFailure("feedback_failure", 3);
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      abortManualFixSession(session.id);
+
+      expect(getManualFixSession(session.id)).toBeUndefined();
+    });
+
+    test("handles abort of non-existent session gracefully", () => {
+      // Should not throw
+      abortManualFixSession("non-existent-id");
+    });
+  });
+
+  describe("buildManualFixContext", () => {
+    test("builds context with file changes", () => {
+      const failure = createTestFailure("feedback_failure", 3);
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      session.detectedChanges = [
+        { path: "src/auth.ts", type: "modified", detectedAt: new Date().toISOString() },
+        { path: "src/utils.ts", type: "created", detectedAt: new Date().toISOString() },
+      ];
+
+      const context = buildManualFixContext(session);
+
+      expect(context).toContain("## Manual Fix Applied");
+      expect(context).toContain(failure.message);
+      expect(context).toContain("- modified: src/auth.ts");
+      expect(context).toContain("- created: src/utils.ts");
+      expect(context).toContain("Continue building on these changes.");
+    });
+
+    test("handles no file changes", () => {
+      const failure = createTestFailure("feedback_failure", 3);
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      const context = buildManualFixContext(session);
+
+      expect(context).toContain("## Manual Fix Applied");
+      expect(context).toContain("- No file changes detected");
+    });
+  });
+
+  describe("watcher lifecycle", () => {
+    test("stops detecting changes after session is aborted", async () => {
+      const failure = createTestFailure("feedback_failure", 3);
+      const session = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-123",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      // Abort the session
+      abortManualFixSession(session.id);
+
+      // Create a file after abort
+      const testFile = join(testDir, "after-abort.ts");
+      await writeFile(testFile, "const x = 1;");
+
+      // Wait for potential watcher activity
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Session should not have detected changes after abort
+      // (session is already removed, but we can verify watcher count)
+      expect(getActiveWatcherCount()).toBe(0);
+    });
+
+    test("multiple sessions can run concurrently", () => {
+      const failure = createTestFailure("feedback_failure", 3);
+
+      const session1 = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-1",
+        taskId: "001-test-task",
+        failure,
+      });
+
+      const session2 = startManualFixSession({
+        workingDir: testDir,
+        battleId: "battle-2",
+        taskId: "002-test-task",
+        failure,
+      });
+
+      expect(getActiveSessionCount()).toBe(2);
+      expect(getActiveWatcherCount()).toBe(2);
+
+      cleanupManualFixSession(session1.id);
+      expect(getActiveSessionCount()).toBe(1);
+
+      cleanupManualFixSession(session2.id);
+      expect(getActiveSessionCount()).toBe(0);
+    });
   });
 });

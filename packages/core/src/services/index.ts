@@ -136,6 +136,18 @@ export {
   buildResumeContext,
   isValidResumeStrategy,
   getDefaultResumeStrategy,
+  // Manual fix mode
+  startManualFixSession,
+  getManualFixSession,
+  getActiveManualFixSessions,
+  cleanupManualFixSession,
+  cleanupAllManualFixSessions,
+  setManualFixVerificationResults,
+  completeManualFixSession,
+  abortManualFixSession,
+  buildManualFixContext,
+  getActiveWatcherCount,
+  getActiveSessionCount,
   // Error classes
   FeedbackLoopError,
   TimeoutError,
@@ -153,6 +165,12 @@ export {
   type ResumeOptions,
   type RetryOptions,
   type ResumeResult,
+  type ManualFixSessionStatus,
+  type FileChangeType,
+  type FileChange,
+  type ManualFixSession,
+  type StartManualFixOptions,
+  type VerifyManualFixResult,
 } from "./recovery-service.ts";
 
 // Custom error classes

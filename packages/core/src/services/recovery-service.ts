@@ -568,3 +568,372 @@ export function getDefaultResumeStrategy(failure: BattleFailure): ResumeStrategy
       return "retry_with_context";
   }
 }
+
+// ==========================================================================
+// Manual Fix Mode (11-recovery.md lines 322-588)
+// ==========================================================================
+
+import type { FeedbackResults } from "../types/progress.ts";
+import { watch, type FSWatcher } from "node:fs";
+
+/**
+ * Status of a manual fix session
+ */
+export type ManualFixSessionStatus = "active" | "completed" | "aborted";
+
+/**
+ * Type of file change detected
+ */
+export type FileChangeType = "modified" | "created" | "deleted";
+
+/**
+ * Represents a file change detected during manual fix mode
+ * Per spec (11-recovery.md lines 459-463)
+ */
+export interface FileChange {
+  /** Path to the changed file (relative to working directory) */
+  path: string;
+  /** Type of change */
+  type: FileChangeType;
+  /** Git diff if available */
+  diff?: string;
+  /** Timestamp when change was detected */
+  detectedAt: string;
+}
+
+/**
+ * Manual fix session for tracking user's manual intervention
+ * Per spec (11-recovery.md lines 447-457)
+ */
+export interface ManualFixSession {
+  /** Unique session ID */
+  id: string;
+  /** Battle ID this session belongs to */
+  battleId: string;
+  /** Task ID this session belongs to */
+  taskId: string;
+  /** Working directory being watched */
+  workingDir: string;
+  /** ISO timestamp when session started */
+  startedAt: string;
+  /** The issue that triggered manual fix mode */
+  issue: BattleFailure;
+  /** Files changed during the session */
+  detectedChanges: FileChange[];
+  /** Last time a change was detected */
+  lastChangeDetected?: string;
+  /** Results of verification after manual fix */
+  verificationResults: FeedbackResults | null;
+  /** Whether the fix has been verified */
+  verified: boolean;
+  /** Current status of the session */
+  status: ManualFixSessionStatus;
+}
+
+/**
+ * Options for starting a manual fix session
+ */
+export interface StartManualFixOptions {
+  /** Working directory to watch */
+  workingDir: string;
+  /** Battle ID */
+  battleId: string;
+  /** Task ID */
+  taskId: string;
+  /** The failure that triggered manual fix mode */
+  failure: BattleFailure;
+  /** Callback when file changes are detected */
+  onChangeDetected?: (session: ManualFixSession, change: FileChange) => void;
+}
+
+/**
+ * Result of verifying a manual fix
+ */
+export interface VerifyManualFixResult {
+  /** Whether all feedback loops passed */
+  verified: boolean;
+  /** Results from each feedback loop */
+  results: FeedbackResults;
+  /** Summary message */
+  message: string;
+}
+
+/**
+ * Tracks active file watchers for cleanup
+ * Per spec (11-recovery.md lines 466, 495-497)
+ */
+const activeWatchers = new Map<string, FSWatcher>();
+
+/**
+ * Tracks active sessions for management
+ */
+const activeSessions = new Map<string, ManualFixSession>();
+
+/**
+ * Generates a unique session ID
+ */
+function generateSessionId(): string {
+  return `mfs-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+}
+
+/**
+ * Files and directories to ignore when watching for changes
+ */
+const IGNORED_PATTERNS = [
+  /node_modules/,
+  /\.git/,
+  /\.pokeralph/,
+  /\.next/,
+  /\.nuxt/,
+  /dist/,
+  /build/,
+  /coverage/,
+  /\.cache/,
+  /\.turbo/,
+  /\.DS_Store/,
+  /\.swp$/,
+  /\.swo$/,
+  /~$/,
+];
+
+/**
+ * Check if a file path should be tracked for changes
+ */
+function shouldTrackChange(filename: string | null): boolean {
+  if (!filename) return false;
+
+  for (const pattern of IGNORED_PATTERNS) {
+    if (pattern.test(filename)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Starts a manual fix session with file watching
+ * Per spec (11-recovery.md lines 468-499)
+ *
+ * @param options - Options for starting the session
+ * @returns The created ManualFixSession
+ */
+export function startManualFixSession(options: StartManualFixOptions): ManualFixSession {
+  const sessionId = generateSessionId();
+
+  const session: ManualFixSession = {
+    id: sessionId,
+    battleId: options.battleId,
+    taskId: options.taskId,
+    workingDir: options.workingDir,
+    startedAt: new Date().toISOString(),
+    issue: options.failure,
+    detectedChanges: [],
+    verificationResults: null,
+    verified: false,
+    status: "active",
+  };
+
+  // Start file watcher
+  const watcher = watch(
+    options.workingDir,
+    { recursive: true },
+    (eventType, filename) => {
+      if (session.status !== "active") return;
+
+      if (shouldTrackChange(filename)) {
+        const change: FileChange = {
+          path: filename ?? "unknown",
+          type: eventType === "rename" ? "created" : "modified",
+          detectedAt: new Date().toISOString(),
+        };
+
+        // Avoid duplicate entries for the same file
+        const existingIndex = session.detectedChanges.findIndex(
+          (c) => c.path === change.path
+        );
+
+        if (existingIndex >= 0) {
+          // Update existing entry
+          session.detectedChanges[existingIndex] = change;
+        } else {
+          session.detectedChanges.push(change);
+        }
+
+        session.lastChangeDetected = change.detectedAt;
+
+        // Notify callback if provided
+        if (options.onChangeDetected) {
+          options.onChangeDetected(session, change);
+        }
+      }
+    }
+  );
+
+  // Track watcher and session for cleanup
+  activeWatchers.set(sessionId, watcher);
+  activeSessions.set(sessionId, session);
+
+  return session;
+}
+
+/**
+ * Gets an active manual fix session by ID
+ *
+ * @param sessionId - The session ID to look up
+ * @returns The session or undefined if not found
+ */
+export function getManualFixSession(sessionId: string): ManualFixSession | undefined {
+  return activeSessions.get(sessionId);
+}
+
+/**
+ * Gets all active manual fix sessions
+ *
+ * @returns Array of active sessions
+ */
+export function getActiveManualFixSessions(): ManualFixSession[] {
+  return Array.from(activeSessions.values()).filter(
+    (s) => s.status === "active"
+  );
+}
+
+/**
+ * Cleans up a manual fix session's resources
+ * MUST be called when session ends, whether completed, aborted, or on error.
+ *
+ * Lifecycle teardown occurs on:
+ * - Session complete: User clicks "Continue Battle"
+ * - Session abort: User clicks "Cancel Battle"
+ * - Battle cancel: Battle cancelled externally
+ * - Server shutdown: Graceful shutdown handler
+ * - Error: Unhandled error in session
+ *
+ * Per spec (11-recovery.md lines 501-518)
+ *
+ * @param sessionId - The session ID to clean up
+ */
+export function cleanupManualFixSession(sessionId: string): void {
+  const watcher = activeWatchers.get(sessionId);
+  if (watcher) {
+    watcher.close();
+    activeWatchers.delete(sessionId);
+  }
+  activeSessions.delete(sessionId);
+}
+
+/**
+ * Cleans up all active manual fix sessions
+ * Called during server shutdown for graceful teardown.
+ *
+ * Per spec (11-recovery.md lines 520-529)
+ */
+export function cleanupAllManualFixSessions(): void {
+  for (const [sessionId, watcher] of activeWatchers) {
+    watcher.close();
+    activeWatchers.delete(sessionId);
+  }
+  activeSessions.clear();
+}
+
+/**
+ * Marks a manual fix session as verified with results
+ * Per spec (11-recovery.md lines 531-539)
+ *
+ * @param sessionId - The session ID
+ * @param results - Results from running feedback loops
+ * @returns Whether verification passed
+ */
+export function setManualFixVerificationResults(
+  sessionId: string,
+  results: FeedbackResults
+): boolean {
+  const session = activeSessions.get(sessionId);
+  if (!session) {
+    throw new Error(`Manual fix session not found: ${sessionId}`);
+  }
+
+  session.verificationResults = results;
+  session.verified = Object.values(results).every((r) => r.passed);
+
+  return session.verified;
+}
+
+/**
+ * Completes a manual fix session successfully
+ * Per spec (11-recovery.md lines 541-566)
+ *
+ * @param sessionId - The session ID to complete
+ * @returns The context string to add to the next iteration
+ * @throws Error if session is not verified
+ */
+export function completeManualFixSession(sessionId: string): string {
+  const session = activeSessions.get(sessionId);
+  if (!session) {
+    throw new Error(`Manual fix session not found: ${sessionId}`);
+  }
+
+  if (!session.verified) {
+    throw new Error("Cannot complete manual fix session - fix not verified");
+  }
+
+  // Build context about the manual fix
+  const context = buildManualFixContext(session);
+
+  // Mark as completed and clean up
+  session.status = "completed";
+  cleanupManualFixSession(sessionId);
+
+  return context;
+}
+
+/**
+ * Aborts a manual fix session
+ * Per spec (11-recovery.md lines 568-571)
+ *
+ * @param sessionId - The session ID to abort
+ */
+export function abortManualFixSession(sessionId: string): void {
+  const session = activeSessions.get(sessionId);
+  if (session) {
+    session.status = "aborted";
+  }
+  cleanupManualFixSession(sessionId);
+}
+
+/**
+ * Builds context about a manual fix for the next iteration
+ * Per spec (11-recovery.md lines 573-587)
+ *
+ * @param session - The manual fix session
+ * @returns Context string to include in the next prompt
+ */
+export function buildManualFixContext(session: ManualFixSession): string {
+  const changes = session.detectedChanges
+    .map((c) => `- ${c.type}: ${c.path}`)
+    .join("\n");
+
+  return `## Manual Fix Applied
+
+The user manually fixed the following issue:
+${session.issue.message}
+
+Files changed:
+${changes || "- No file changes detected"}
+
+Continue building on these changes.`;
+}
+
+/**
+ * Gets the number of active watchers (for testing/monitoring)
+ */
+export function getActiveWatcherCount(): number {
+  return activeWatchers.size;
+}
+
+/**
+ * Gets the number of active sessions (for testing/monitoring)
+ */
+export function getActiveSessionCount(): number {
+  return activeSessions.size;
+}
