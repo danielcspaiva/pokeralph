@@ -406,5 +406,97 @@
 - Lint: PASS (0 new errors - pre-existing web package lint warnings)
 - Tests: 633 pass, 0 fail
 
+**Commit:** a975e3f (verification only - no code changes needed)
+
+## Task 010: Verify completion detection against spec - COMPLETED
+
+**Spec:** 03-battles.md
+**Files Verified:**
+- packages/core/src/services/battle-orchestrator.ts
+- packages/core/src/services/prompt-builder.ts
+- packages/core/tests/battle-orchestrator.test.ts
+- packages/core/tests/fixtures/mock-claude.ts
+
+**Verification Summary:**
+
+1. Sigil format `<promise>COMPLETE</promise>`:
+   - Defined in prompt-builder.ts line 141 as `COMPLETION_SIGIL`
+   - Detection in battle-orchestrator.ts line 585: `claudeResult.output.includes(COMPLETION_SIGIL)`
+   - Mock claude outputs sigil correctly in success mode (mock-claude.ts line 46)
+   - Tests verify completion detection works (battle-orchestrator.test.ts)
+
+2. Partial output handling per spec:
+   - Spec line 1237 notes "Easily missed if output is truncated" as a problem
+   - Current implementation uses simple `includes()` check which works for complete output
+   - No additional partial output handling required by current spec
+   - Structured completion (with JSON validation) is a Phase 9 enhancement (Task 032)
+
+3. Structured completion (Phase 9):
+   - Spec lines 1232-1342 describe this as a "UX Enhancement" for future
+   - Uses `<completion>` JSON block with acceptance criteria validation
+   - This is Task 032, NOT Task 010
+   - Task 010 only verifies current sigil-based completion
+
+**Existing Implementation Already Matches Spec:**
+- No code changes required
+- All 27 BattleOrchestrator tests pass
+- Implementation covers all acceptance criteria from spec
+
+**Acceptance Criteria Status:**
+- [x] Sigil format: `<promise>COMPLETE</promise>` - correctly implemented
+- [x] Partial output handling per spec - current behavior matches spec (simple includes check)
+- [x] Structured completion if in spec (Phase 9) - deferred to Task 032
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 new errors - pre-existing web package lint warnings)
+- Tests: 633 pass, 0 fail
+
 **Commit:** (verification only - no code changes needed)
+
+## Task 011: Verify feedback loops against spec - COMPLETED
+
+**Spec:** 03-battles.md
+**Files Modified:**
+- packages/core/src/types/iteration.ts
+- packages/core/src/services/battle-orchestrator.ts
+- packages/core/src/services/schemas.ts
+- packages/core/tests/battle-orchestrator.test.ts
+
+**Changes Made:**
+1. Added `feedbackResults` field to `Iteration` type:
+   - New optional field: `feedbackResults?: FeedbackResults`
+   - Stores feedback loop results (passed, output, duration) per loop name
+
+2. Updated `IterationSchema` in schemas.ts:
+   - Added `feedbackResults` field validation
+   - Uses z.record with FeedbackResult shape
+
+3. Updated `executeIteration()` in battle-orchestrator.ts:
+   - Added `feedbackResults` to return type
+   - Converts FeedbackLoopResult[] to FeedbackResults record
+   - Populates iteration.feedbackResults before saving to history
+
+4. Added test "stores feedback results in iteration history":
+   - Verifies feedbackResults are persisted in battle history
+   - Checks structure: passed, output, duration fields
+
+**Verification against spec (03-battles.md lines 91-95, 580-599):**
+- Command execution per spec: FeedbackRunner.runLoop() executes via `bun run <name>` ✓
+- Pass/fail recording: Exit code 0 = passed, non-zero = failed ✓
+- Timeout handling: Configurable timeout (default 5 min), kills process on timeout ✓
+- Results in iteration history: Now stored in Iteration.feedbackResults ✓
+
+**Acceptance Criteria Status:**
+- [x] Command execution per spec
+- [x] Pass/fail recording per spec
+- [x] Timeout handling per spec
+- [x] Results in iteration history
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 new errors - pre-existing web package lint warnings)
+- Tests: 634 pass, 0 fail
+
+**Commit:** (pending)
 

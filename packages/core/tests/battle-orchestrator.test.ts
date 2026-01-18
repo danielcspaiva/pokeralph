@@ -292,6 +292,45 @@ describe("BattleOrchestrator", () => {
       const task = prd.tasks.find((t) => t.id === taskId);
       expect(task?.status).toBe(TaskStatus.Completed);
     });
+
+    test("stores feedback results in iteration history", async () => {
+      const taskId = "001-test-task";
+      await deps.fileManager.savePRD(createMockPRD(taskId));
+
+      // Configure with feedback loops enabled
+      const config: Config = {
+        ...DEFAULT_CONFIG,
+        maxIterationsPerTask: 1,
+        feedbackLoops: ["test", "lint"], // Enable feedback loops
+        autoCommit: false,
+      };
+      await deps.fileManager.saveConfig(config);
+
+      await orchestrator.startBattle(taskId, "yolo");
+
+      // Verify feedback results are in iteration history
+      const battle = await deps.fileManager.loadBattleHistory(taskId);
+      expect(battle).not.toBeNull();
+      expect(battle!.iterations.length).toBeGreaterThan(0);
+
+      const iteration = battle!.iterations[0];
+      expect(iteration).toBeDefined();
+      expect(iteration!.feedbackResults).toBeDefined();
+
+      // Verify feedback results structure
+      const feedbackResults = iteration!.feedbackResults;
+      expect(feedbackResults).toBeDefined();
+
+      const testResult = feedbackResults?.test;
+      expect(testResult).toBeDefined();
+      expect(testResult?.passed).toBe(true);
+      expect(typeof testResult?.output).toBe("string");
+      expect(typeof testResult?.duration).toBe("number");
+
+      const lintResult = feedbackResults?.lint;
+      expect(lintResult).toBeDefined();
+      expect(lintResult?.passed).toBe(true);
+    });
   });
 
   // ============================================================================

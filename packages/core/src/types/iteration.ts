@@ -5,6 +5,8 @@
  * Iterations are stored in `.pokeralph/battles/{task-id}/history.json`.
  */
 
+import type { FeedbackResults } from "./progress.ts";
+
 /**
  * Result of an iteration
  */
@@ -69,6 +71,11 @@ export interface Iteration {
    * Error message if the iteration failed
    */
   error?: string;
+
+  /**
+   * Results of feedback loops run after this iteration
+   */
+  feedbackResults?: FeedbackResults;
 }
 
 /**

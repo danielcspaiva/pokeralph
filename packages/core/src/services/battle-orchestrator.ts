@@ -25,6 +25,7 @@ import type {
   Iteration,
   ExecutionMode,
   PRD,
+  FeedbackResults,
 } from "../types/index.ts";
 import {
   TaskStatus,
@@ -458,6 +459,7 @@ export class BattleOrchestrator extends EventEmitter {
         iteration.output = result.output;
         iteration.filesChanged = result.filesChanged;
         iteration.commitHash = result.commitHash;
+        iteration.feedbackResults = result.feedbackResults;
         if (result.error) {
           iteration.error = result.error;
         }
@@ -542,6 +544,7 @@ export class BattleOrchestrator extends EventEmitter {
     filesChanged: string[];
     commitHash?: string;
     error?: string;
+    feedbackResults?: FeedbackResults;
   }> {
     if (this.state === null) {
       return {
@@ -622,6 +625,16 @@ export class BattleOrchestrator extends EventEmitter {
       }
     }
 
+    // Convert feedback loop results to FeedbackResults record for iteration history
+    const feedbackResultsRecord: FeedbackResults = {};
+    for (const result of feedbackResults) {
+      feedbackResultsRecord[result.name] = {
+        passed: result.passed,
+        output: result.output,
+        duration: result.duration,
+      };
+    }
+
     return {
       success: claudeResult.exitCode === 0 && allPassed,
       output: claudeResult.output,
@@ -629,6 +642,7 @@ export class BattleOrchestrator extends EventEmitter {
       filesChanged,
       commitHash,
       error: claudeResult.error,
+      feedbackResults: feedbackResultsRecord,
     };
   }
 

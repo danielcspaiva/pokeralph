@@ -39,6 +39,12 @@ export const IterationSchema = z.object({
   filesChanged: z.array(z.string()),
   commitHash: z.string().optional(),
   error: z.string().optional(),
+  // FeedbackResultsSchema is defined later in the file, using z.lazy to avoid circular ref
+  feedbackResults: z.record(z.string(), z.object({
+    passed: z.boolean(),
+    output: z.string(),
+    duration: z.number().optional(),
+  })).optional(),
 });
 
 /**
