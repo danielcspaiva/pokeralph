@@ -35,7 +35,7 @@ export const IterationSchema = z.object({
   startedAt: z.string().datetime(),
   endedAt: z.string().datetime().optional(),
   output: z.string(),
-  result: z.enum(["success", "failure", "timeout", "cancelled"]),
+  result: z.enum(["pending", "success", "failure", "timeout", "cancelled"]),
   filesChanged: z.array(z.string()),
   commitHash: z.string().optional(),
   error: z.string().optional(),
@@ -45,6 +45,8 @@ export const IterationSchema = z.object({
     output: z.string(),
     duration: z.number().optional(),
   })).optional(),
+  // Retry count for resume strategies per spec 11-recovery.md
+  retryCount: z.number().int().nonnegative().optional(),
 });
 
 /**

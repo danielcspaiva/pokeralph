@@ -1289,3 +1289,154 @@ and is not required for the core Task 018 acceptance criteria.
 
 **Commit:** 52fbd9c
 
+## Task 026: Verify failure classification against spec - COMPLETED
+
+**Spec:** 11-recovery.md
+**Files Created:**
+- packages/core/src/services/recovery-service.ts
+- packages/core/tests/recovery-service.test.ts
+
+**Files Modified:**
+- packages/core/src/index.ts
+- packages/core/src/services/index.ts
+
+**Changes Made:**
+
+1. Created RecoveryService with failure classification per spec (11-recovery.md lines 55-146):
+   - 6 failure types: feedback_failure, timeout, claude_error, system_error, cancellation, crash
+   - BattleFailure interface with type, timestamp, iteration, message, details, recoverable, suggestedAction
+   - RecoveryAction types: retry_iteration, fix_and_continue, rollback, restart, manual_resolution
+
+2. Implemented custom error classes per spec:
+   - FeedbackLoopError: For test/lint/typecheck failures
+   - TimeoutError: For iteration timeout
+   - ClaudeError: For API/CLI errors (with retryable flag)
+   - SystemError: For disk/permission errors (with error code)
+   - CancellationError: For user cancellation
+   - CrashError: For process crashes (with signal)
+
+3. Implemented classifyFailure() function (spec lines 96-146):
+   - Detects FeedbackLoopError → feedback_failure (recoverable, retry_iteration)
+   - Detects TimeoutError → timeout (recoverable, retry_iteration)
+   - Detects ClaudeError → claude_error (retryable determines recoverability)
+   - Detects CancellationError → cancellation (recoverable, restart)
+   - Detects CrashError → crash (recoverable, restart)
+   - Detects system error patterns (ENOSPC, EACCES, EPERM, EMFILE, ENOMEM) → system_error
+   - Unknown errors default to system_error (non-recoverable)
+
+4. Added severity levels per spec (lines 59-66):
+   - Low: feedback_failure, cancellation
+   - Medium: timeout, claude_error
+   - High: system_error, crash
+
+5. Added recovery options per failure type:
+   - feedback_failure: retry_iteration, fix_and_continue, rollback
+   - timeout: retry_iteration, rollback
+   - claude_error: retry_iteration, manual_resolution
+   - system_error: manual_resolution, restart
+   - cancellation: restart, rollback
+   - crash: restart, rollback, manual_resolution
+
+6. Added helper functions:
+   - getFailureSeverity(): Returns low/medium/high for a failure type
+   - getRecoveryOptions(): Returns available actions for a failure type
+   - getFailureMessage(): Returns user-friendly message for a failure
+   - getRecoverySuggestion(): Returns suggestion text for an action
+   - getAllRecoverySuggestions(): Returns all options with recommendations
+
+7. Added 60 comprehensive tests:
+   - classifyFailure tests for all 6 error types
+   - System error pattern detection tests
+   - Severity level tests
+   - Recovery options tests
+   - Message and suggestion generation tests
+   - Custom error class tests
+
+**Acceptance Criteria Status:**
+- [x] All failure types from spec (feedback_failure, timeout, claude_error, system_error, cancellation, crash)
+- [x] Classification logic per spec (classifyFailure function with pattern matching)
+- [x] Recovery suggestions per spec (retry_iteration, fix_and_continue, rollback, restart, manual_resolution)
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 870 pass, 0 fail (60 new tests)
+
+**Commit:** e26f0a8
+
+## Task 027: Verify resume strategies against spec - COMPLETED
+
+**Spec:** 11-recovery.md
+**Files Modified:**
+- packages/core/src/services/recovery-service.ts
+- packages/core/src/services/index.ts
+- packages/core/src/services/schemas.ts
+- packages/core/src/types/iteration.ts
+- packages/core/tests/recovery-service.test.ts
+
+**Changes Made:**
+
+1. Added ResumeStrategy type per spec (11-recovery.md lines 188-193):
+   - retry_same: Retry the failed iteration without additional context
+   - retry_with_context: Retry with error context added to prompt
+   - rollback_and_retry: Revert changes, retry from clean state
+   - continue_next: Skip to next iteration
+   - manual_then_continue: Wait for manual fix
+
+2. Added ResumeOptions and RetryOptions interfaces per spec (lines 180-186):
+   - strategy: ResumeStrategy
+   - fromIteration?: number
+   - includeErrorContext: boolean
+   - additionalInstructions?: string
+
+3. Implemented buildRetryPrompt() per spec (lines 291-318):
+   - Builds enhanced prompt with error context
+   - Adds "## Previous Attempt Failed" section when includeErrorContext is true
+   - Adds "## Additional Instructions" section when user provides instructions
+
+4. Implemented prepareIterationForRetry() per spec (lines 306-314):
+   - Creates new iteration with pending result
+   - Tracks retry count from existing iteration
+   - Increments retryCount on each retry
+
+5. Implemented buildResumeContext() for all 5 strategies:
+   - Returns ResumeResult with success, strategy, iteration, message, errorContext
+   - Handles each strategy appropriately
+
+6. Added isValidResumeStrategy() for validation:
+   - Non-recoverable failures only allow manual_then_continue
+   - Maps resume strategies to recovery actions for validation
+
+7. Added getDefaultResumeStrategy() per spec:
+   - Returns retry_with_context for retry_iteration suggestion
+   - Returns manual_then_continue for non-recoverable failures
+
+8. Updated Iteration type to include retryCount field per spec
+9. Updated IterationSchema to include:
+   - "pending" as valid result for in-progress iterations
+   - retryCount field with nonnegative integer validation
+
+10. Exported all new functions and types from services/index.ts:
+    - buildRetryPrompt, prepareIterationForRetry, buildResumeContext
+    - isValidResumeStrategy, getDefaultResumeStrategy
+    - ResumeStrategy, ResumeOptions, RetryOptions, ResumeResult types
+
+11. Added 27 comprehensive tests for resume strategies:
+    - buildRetryPrompt: 5 tests for context/instructions handling
+    - prepareIterationForRetry: 4 tests for retry count logic
+    - buildResumeContext: 6 tests for all 5 strategies
+    - isValidResumeStrategy: 6 tests for recoverable/non-recoverable
+    - getDefaultResumeStrategy: 6 tests for all suggested actions
+
+**Acceptance Criteria Status:**
+- [x] Retry with context per spec (buildRetryPrompt adds error context)
+- [x] Rollback per spec (rollback_and_retry strategy with context)
+- [x] Manual fix entry per spec (manual_then_continue strategy)
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 897 pass, 0 fail (27 new tests)
+
+**Commit:** 59cffbf
+

@@ -6,6 +6,8 @@
  */
 
 import type { Config } from "../types/config.ts";
+import type { Battle } from "../types/battle.ts";
+import type { Iteration } from "../types/iteration.ts";
 
 /**
  * Failure types per spec (11-recovery.md lines 59-66)
@@ -343,4 +345,226 @@ export function getAllRecoverySuggestions(
     description: getRecoverySuggestion({ ...failure, suggestedAction: action }),
     recommended: action === failure.suggestedAction,
   }));
+}
+
+// ==========================================================================
+// Resume Strategies (11-recovery.md lines 180-318)
+// ==========================================================================
+
+/**
+ * Resume strategy types per spec (11-recovery.md lines 188-193)
+ */
+export type ResumeStrategy =
+  | "retry_same"          // Retry the failed iteration
+  | "retry_with_context"  // Retry with error context added
+  | "rollback_and_retry"  // Revert changes, retry
+  | "continue_next"       // Skip to next iteration
+  | "manual_then_continue"; // Wait for manual fix
+
+/**
+ * Options for resuming a battle per spec (11-recovery.md lines 180-186)
+ */
+export interface ResumeOptions {
+  strategy: ResumeStrategy;
+  fromIteration?: number;
+  includeErrorContext: boolean;
+  additionalInstructions?: string;
+}
+
+/**
+ * Options for retrying an iteration
+ */
+export interface RetryOptions {
+  includeErrorContext: boolean;
+  errorContext?: string;
+  additionalInstructions?: string;
+}
+
+/**
+ * Result of a resume operation
+ */
+export interface ResumeResult {
+  success: boolean;
+  strategy: ResumeStrategy;
+  iteration: number;
+  message: string;
+  errorContext?: string;
+  additionalInstructions?: string;
+}
+
+/**
+ * Builds the enhanced prompt for retry with context per spec (11-recovery.md lines 291-318)
+ *
+ * @param basePrompt - The original task prompt
+ * @param options - Retry options with error context and instructions
+ * @returns The enhanced prompt
+ */
+export function buildRetryPrompt(
+  basePrompt: string,
+  options: RetryOptions
+): string {
+  let prompt = basePrompt;
+
+  if (options.includeErrorContext && options.errorContext) {
+    prompt += `\n\n## Previous Attempt Failed\n\n${options.errorContext}`;
+  }
+
+  if (options.additionalInstructions) {
+    prompt += `\n\n## Additional Instructions\n\n${options.additionalInstructions}`;
+  }
+
+  return prompt;
+}
+
+/**
+ * Prepares an iteration for retry per spec (11-recovery.md lines 306-314)
+ *
+ * @param battle - The battle being resumed
+ * @param iteration - The iteration to retry
+ * @returns The reset iteration ready for retry
+ */
+export function prepareIterationForRetry(
+  battle: Battle,
+  iteration: number
+): Iteration {
+  const existingIteration = battle.iterations[iteration - 1];
+  const retryCount = existingIteration?.retryCount ?? 0;
+
+  return {
+    number: iteration,
+    startedAt: new Date().toISOString(),
+    output: "",
+    result: "pending",
+    filesChanged: [],
+    retryCount: retryCount + 1,
+  };
+}
+
+/**
+ * Builds resume context based on the strategy and failure
+ *
+ * @param strategy - The resume strategy
+ * @param failure - The battle failure information
+ * @param additionalInstructions - User-provided instructions
+ * @returns ResumeResult with context for the resumption
+ */
+export function buildResumeContext(
+  strategy: ResumeStrategy,
+  failure: BattleFailure,
+  additionalInstructions?: string
+): ResumeResult {
+  switch (strategy) {
+    case "retry_same":
+      return {
+        success: true,
+        strategy,
+        iteration: failure.iteration,
+        message: `Retrying iteration ${failure.iteration} without additional context`,
+      };
+
+    case "retry_with_context":
+      return {
+        success: true,
+        strategy,
+        iteration: failure.iteration,
+        message: `Retrying iteration ${failure.iteration} with error context`,
+        errorContext: failure.details ?? failure.message,
+        additionalInstructions,
+      };
+
+    case "rollback_and_retry":
+      return {
+        success: true,
+        strategy,
+        iteration: failure.iteration,
+        message: `Rolling back changes from iteration ${failure.iteration} and retrying`,
+        errorContext: `Previous attempt failed: ${failure.message}`,
+        additionalInstructions,
+      };
+
+    case "continue_next":
+      return {
+        success: true,
+        strategy,
+        iteration: failure.iteration + 1,
+        message: `Skipping to iteration ${failure.iteration + 1}`,
+        additionalInstructions,
+      };
+
+    case "manual_then_continue":
+      return {
+        success: true,
+        strategy,
+        iteration: failure.iteration,
+        message: "Pausing for manual fix",
+        additionalInstructions,
+      };
+
+    default:
+      return {
+        success: false,
+        strategy,
+        iteration: failure.iteration,
+        message: `Unknown resume strategy: ${strategy}`,
+      };
+  }
+}
+
+/**
+ * Validates if a resume strategy is valid for the given failure type
+ *
+ * @param strategy - The resume strategy to validate
+ * @param failure - The battle failure
+ * @returns True if the strategy is valid for this failure
+ */
+export function isValidResumeStrategy(
+  strategy: ResumeStrategy,
+  failure: BattleFailure
+): boolean {
+  // Non-recoverable failures only allow manual_resolution (which maps to manual_then_continue)
+  if (!failure.recoverable) {
+    return strategy === "manual_then_continue";
+  }
+
+  // Map resume strategies to recovery actions for validation
+  const strategyToAction: Record<ResumeStrategy, RecoveryAction> = {
+    retry_same: "retry_iteration",
+    retry_with_context: "retry_iteration",
+    rollback_and_retry: "rollback",
+    continue_next: "retry_iteration", // Effectively skipping is a form of retry
+    manual_then_continue: "fix_and_continue",
+  };
+
+  const mappedAction = strategyToAction[strategy];
+  const validActions = getRecoveryOptions(failure.type);
+
+  return validActions.includes(mappedAction);
+}
+
+/**
+ * Gets the default resume strategy for a failure type
+ *
+ * @param failure - The battle failure
+ * @returns The recommended default strategy
+ */
+export function getDefaultResumeStrategy(failure: BattleFailure): ResumeStrategy {
+  if (!failure.recoverable) {
+    return "manual_then_continue";
+  }
+
+  // Map suggested actions to resume strategies
+  switch (failure.suggestedAction) {
+    case "retry_iteration":
+      return "retry_with_context"; // Default to retry with context for better recovery
+    case "fix_and_continue":
+      return "manual_then_continue";
+    case "rollback":
+      return "rollback_and_retry";
+    case "restart":
+      return "retry_same";
+    case "manual_resolution":
+      return "manual_then_continue";
+    default:
+      return "retry_with_context";
+  }
 }

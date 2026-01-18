@@ -10,7 +10,7 @@ import type { FeedbackResults } from "./progress.ts";
 /**
  * Result of an iteration
  */
-export type IterationResult = "success" | "failure" | "timeout" | "cancelled";
+export type IterationResult = "pending" | "success" | "failure" | "timeout" | "cancelled";
 
 /**
  * A single iteration within a battle
@@ -76,6 +76,12 @@ export interface Iteration {
    * Results of feedback loops run after this iteration
    */
   feedbackResults?: FeedbackResults;
+
+  /**
+   * Number of times this iteration has been retried (for resume)
+   * Per spec 11-recovery.md lines 306-314
+   */
+  retryCount?: number;
 }
 
 /**

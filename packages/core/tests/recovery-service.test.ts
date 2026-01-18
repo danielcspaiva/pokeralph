@@ -13,6 +13,13 @@ import {
   getFailureMessage,
   getRecoverySuggestion,
   getAllRecoverySuggestions,
+  // Resume strategy functions
+  buildRetryPrompt,
+  prepareIterationForRetry,
+  buildResumeContext,
+  isValidResumeStrategy,
+  getDefaultResumeStrategy,
+  // Error classes
   FeedbackLoopError,
   TimeoutError,
   ClaudeError,
@@ -22,7 +29,9 @@ import {
   type BattleContext,
   type FailureType,
   type RecoveryAction,
+  type BattleFailure,
 } from "../src/services/recovery-service.ts";
+import { createBattle } from "../src/types/battle.ts";
 import { DEFAULT_CONFIG } from "../src/types/config.ts";
 
 // Test context for all tests
@@ -601,5 +610,302 @@ describe("custom error classes", () => {
       const error = new CrashError("crashed");
       expect(error.signal).toBeUndefined();
     });
+  });
+});
+
+// =============================================================================
+// Resume Strategy Tests (11-recovery.md lines 180-318)
+// =============================================================================
+
+// Helper to create test failure
+const createTestFailure = (
+  type: FailureType = "feedback_failure",
+  iteration = 3,
+  recoverable = true
+): BattleFailure => ({
+  type,
+  timestamp: new Date().toISOString(),
+  iteration,
+  message: "Test failure message",
+  details: "Test failure details",
+  recoverable,
+  suggestedAction: "retry_iteration",
+});
+
+describe("buildRetryPrompt", () => {
+  test("returns base prompt when no context or instructions", () => {
+    const basePrompt = "Implement feature X";
+    const result = buildRetryPrompt(basePrompt, {
+      includeErrorContext: false,
+    });
+
+    expect(result).toBe(basePrompt);
+  });
+
+  test("adds error context when includeErrorContext is true", () => {
+    const basePrompt = "Implement feature X";
+    const result = buildRetryPrompt(basePrompt, {
+      includeErrorContext: true,
+      errorContext: "Type error on line 42",
+    });
+
+    expect(result).toContain(basePrompt);
+    expect(result).toContain("## Previous Attempt Failed");
+    expect(result).toContain("Type error on line 42");
+  });
+
+  test("adds additional instructions when provided", () => {
+    const basePrompt = "Implement feature X";
+    const result = buildRetryPrompt(basePrompt, {
+      includeErrorContext: false,
+      additionalInstructions: "Focus on edge cases",
+    });
+
+    expect(result).toContain(basePrompt);
+    expect(result).toContain("## Additional Instructions");
+    expect(result).toContain("Focus on edge cases");
+  });
+
+  test("includes both error context and instructions", () => {
+    const basePrompt = "Implement feature X";
+    const result = buildRetryPrompt(basePrompt, {
+      includeErrorContext: true,
+      errorContext: "Test failed",
+      additionalInstructions: "Use a different approach",
+    });
+
+    expect(result).toContain("## Previous Attempt Failed");
+    expect(result).toContain("Test failed");
+    expect(result).toContain("## Additional Instructions");
+    expect(result).toContain("Use a different approach");
+  });
+
+  test("does not add error context when context is undefined", () => {
+    const basePrompt = "Implement feature X";
+    const result = buildRetryPrompt(basePrompt, {
+      includeErrorContext: true,
+      errorContext: undefined,
+    });
+
+    expect(result).toBe(basePrompt);
+    expect(result).not.toContain("## Previous Attempt Failed");
+  });
+});
+
+describe("prepareIterationForRetry", () => {
+  test("creates iteration with pending result", () => {
+    const battle = createBattle("001-test");
+    const iteration = prepareIterationForRetry(battle, 1);
+
+    expect(iteration.number).toBe(1);
+    expect(iteration.result).toBe("pending");
+    expect(iteration.startedAt).toBeTruthy();
+  });
+
+  test("increments retry count from existing iteration", () => {
+    const battle = createBattle("001-test");
+    battle.iterations = [
+      {
+        number: 1,
+        startedAt: new Date().toISOString(),
+        output: "failed",
+        result: "failure",
+        filesChanged: [],
+        retryCount: 2,
+      },
+    ];
+
+    const iteration = prepareIterationForRetry(battle, 1);
+
+    expect(iteration.retryCount).toBe(3);
+  });
+
+  test("starts retry count at 1 when no existing iteration", () => {
+    const battle = createBattle("001-test");
+    const iteration = prepareIterationForRetry(battle, 1);
+
+    expect(iteration.retryCount).toBe(1);
+  });
+
+  test("starts retry count at 1 when existing iteration has no retry count", () => {
+    const battle = createBattle("001-test");
+    battle.iterations = [
+      {
+        number: 1,
+        startedAt: new Date().toISOString(),
+        output: "failed",
+        result: "failure",
+        filesChanged: [],
+      },
+    ];
+
+    const iteration = prepareIterationForRetry(battle, 1);
+
+    expect(iteration.retryCount).toBe(1);
+  });
+});
+
+describe("buildResumeContext", () => {
+  test("builds context for retry_same strategy", () => {
+    const failure = createTestFailure("feedback_failure", 3);
+    const result = buildResumeContext("retry_same", failure);
+
+    expect(result.success).toBe(true);
+    expect(result.strategy).toBe("retry_same");
+    expect(result.iteration).toBe(3);
+    expect(result.message).toContain("iteration 3");
+    expect(result.errorContext).toBeUndefined();
+  });
+
+  test("builds context for retry_with_context strategy", () => {
+    const failure = createTestFailure("feedback_failure", 3);
+    const result = buildResumeContext("retry_with_context", failure, "Try a different approach");
+
+    expect(result.success).toBe(true);
+    expect(result.strategy).toBe("retry_with_context");
+    expect(result.iteration).toBe(3);
+    expect(result.errorContext).toBe("Test failure details");
+    expect(result.additionalInstructions).toBe("Try a different approach");
+  });
+
+  test("uses message when details not available for retry_with_context", () => {
+    const failure: BattleFailure = {
+      type: "timeout",
+      timestamp: new Date().toISOString(),
+      iteration: 2,
+      message: "Timed out",
+      recoverable: true,
+      suggestedAction: "retry_iteration",
+    };
+    const result = buildResumeContext("retry_with_context", failure);
+
+    expect(result.errorContext).toBe("Timed out");
+  });
+
+  test("builds context for rollback_and_retry strategy", () => {
+    const failure = createTestFailure("feedback_failure", 4);
+    const result = buildResumeContext("rollback_and_retry", failure);
+
+    expect(result.success).toBe(true);
+    expect(result.strategy).toBe("rollback_and_retry");
+    expect(result.iteration).toBe(4);
+    expect(result.message).toContain("Rolling back");
+    expect(result.errorContext).toContain("Previous attempt failed");
+  });
+
+  test("builds context for continue_next strategy", () => {
+    const failure = createTestFailure("feedback_failure", 3);
+    const result = buildResumeContext("continue_next", failure);
+
+    expect(result.success).toBe(true);
+    expect(result.strategy).toBe("continue_next");
+    expect(result.iteration).toBe(4); // Next iteration
+    expect(result.message).toContain("iteration 4");
+  });
+
+  test("builds context for manual_then_continue strategy", () => {
+    const failure = createTestFailure("system_error", 3);
+    const result = buildResumeContext("manual_then_continue", failure);
+
+    expect(result.success).toBe(true);
+    expect(result.strategy).toBe("manual_then_continue");
+    expect(result.iteration).toBe(3);
+    expect(result.message).toContain("manual fix");
+  });
+});
+
+describe("isValidResumeStrategy", () => {
+  describe("for recoverable failures", () => {
+    test("allows retry_same for feedback_failure", () => {
+      const failure = createTestFailure("feedback_failure");
+      expect(isValidResumeStrategy("retry_same", failure)).toBe(true);
+    });
+
+    test("allows retry_with_context for feedback_failure", () => {
+      const failure = createTestFailure("feedback_failure");
+      expect(isValidResumeStrategy("retry_with_context", failure)).toBe(true);
+    });
+
+    test("allows rollback_and_retry for feedback_failure", () => {
+      const failure = createTestFailure("feedback_failure");
+      expect(isValidResumeStrategy("rollback_and_retry", failure)).toBe(true);
+    });
+
+    test("allows manual_then_continue for feedback_failure", () => {
+      const failure = createTestFailure("feedback_failure");
+      expect(isValidResumeStrategy("manual_then_continue", failure)).toBe(true);
+    });
+
+    test("allows retry strategies for timeout", () => {
+      const failure = createTestFailure("timeout");
+      expect(isValidResumeStrategy("retry_same", failure)).toBe(true);
+      expect(isValidResumeStrategy("retry_with_context", failure)).toBe(true);
+    });
+  });
+
+  describe("for non-recoverable failures", () => {
+    test("only allows manual_then_continue for non-recoverable", () => {
+      const failure = createTestFailure("system_error", 3, false);
+
+      expect(isValidResumeStrategy("manual_then_continue", failure)).toBe(true);
+      expect(isValidResumeStrategy("retry_same", failure)).toBe(false);
+      expect(isValidResumeStrategy("retry_with_context", failure)).toBe(false);
+      expect(isValidResumeStrategy("rollback_and_retry", failure)).toBe(false);
+      expect(isValidResumeStrategy("continue_next", failure)).toBe(false);
+    });
+  });
+});
+
+describe("getDefaultResumeStrategy", () => {
+  test("returns retry_with_context for retry_iteration suggestion", () => {
+    const failure: BattleFailure = {
+      ...createTestFailure("feedback_failure"),
+      suggestedAction: "retry_iteration",
+    };
+
+    expect(getDefaultResumeStrategy(failure)).toBe("retry_with_context");
+  });
+
+  test("returns manual_then_continue for fix_and_continue suggestion", () => {
+    const failure: BattleFailure = {
+      ...createTestFailure("feedback_failure"),
+      suggestedAction: "fix_and_continue",
+    };
+
+    expect(getDefaultResumeStrategy(failure)).toBe("manual_then_continue");
+  });
+
+  test("returns rollback_and_retry for rollback suggestion", () => {
+    const failure: BattleFailure = {
+      ...createTestFailure("feedback_failure"),
+      suggestedAction: "rollback",
+    };
+
+    expect(getDefaultResumeStrategy(failure)).toBe("rollback_and_retry");
+  });
+
+  test("returns retry_same for restart suggestion", () => {
+    const failure: BattleFailure = {
+      ...createTestFailure("cancellation"),
+      suggestedAction: "restart",
+    };
+
+    expect(getDefaultResumeStrategy(failure)).toBe("retry_same");
+  });
+
+  test("returns manual_then_continue for manual_resolution suggestion", () => {
+    const failure: BattleFailure = {
+      ...createTestFailure("system_error"),
+      suggestedAction: "manual_resolution",
+    };
+
+    expect(getDefaultResumeStrategy(failure)).toBe("manual_then_continue");
+  });
+
+  test("returns manual_then_continue for non-recoverable failures", () => {
+    const failure = createTestFailure("system_error", 3, false);
+    failure.suggestedAction = "retry_iteration"; // Even if suggestion is retry
+
+    expect(getDefaultResumeStrategy(failure)).toBe("manual_then_continue");
   });
 });

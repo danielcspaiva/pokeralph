@@ -123,23 +123,36 @@ export {
 
 // RecoveryService - handles failure classification and recovery
 export {
+  // Failure classification
   classifyFailure,
   getFailureSeverity,
   getRecoveryOptions,
   getFailureMessage,
   getRecoverySuggestion,
   getAllRecoverySuggestions,
+  // Resume strategies
+  buildRetryPrompt,
+  prepareIterationForRetry,
+  buildResumeContext,
+  isValidResumeStrategy,
+  getDefaultResumeStrategy,
+  // Error classes
   FeedbackLoopError,
   TimeoutError,
   ClaudeError,
   SystemError,
   CancellationError,
   CrashError,
+  // Types
   type FailureType,
   type RecoveryAction,
   type BattleFailure,
   type BattleContext,
   type FailureSeverity,
+  type ResumeStrategy,
+  type ResumeOptions,
+  type RetryOptions,
+  type ResumeResult,
 } from "./recovery-service.ts";
 
 // Custom error classes
