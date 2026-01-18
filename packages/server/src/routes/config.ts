@@ -7,7 +7,7 @@
 import { resolve } from "node:path";
 import { Hono } from "hono";
 import { z } from "zod";
-import { ConfigSchema } from "@pokeralph/core";
+import { ConfigSchema, DEFAULT_CONFIG } from "@pokeralph/core";
 import { getOrchestrator, switchOrchestrator } from "../index.ts";
 import { AppError } from "../middleware/error-handler.ts";
 
@@ -16,6 +16,13 @@ import { AppError } from "../middleware/error-handler.ts";
  */
 const WorkingDirSchema = z.object({
   path: z.string().min(1, "Path is required"),
+});
+
+/**
+ * Schema for validating feedback loop validation requests
+ */
+const ValidateLoopsSchema = z.object({
+  loops: z.array(z.string().min(1, "Loop command cannot be empty")),
 });
 
 /**
@@ -133,6 +140,133 @@ export function createConfigRoutes(): Hono {
       }
       throw error;
     }
+  });
+
+  // ==========================================================================
+  // Reset Endpoint
+  // ==========================================================================
+
+  /**
+   * POST /api/config/reset
+   *
+   * Resets the configuration to default values.
+   *
+   * @returns {Config} The default configuration
+   * @throws {503} If orchestrator is not initialized
+   */
+  router.post("/reset", async (c) => {
+    const orchestrator = getOrchestrator();
+    if (!orchestrator) {
+      throw new AppError(
+        "Orchestrator not initialized. Server may still be starting.",
+        503,
+        "SERVICE_UNAVAILABLE"
+      );
+    }
+
+    try {
+      await orchestrator.updateConfig(DEFAULT_CONFIG);
+      return c.json({ config: DEFAULT_CONFIG });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to reset config";
+      throw new AppError(message, 500, "RESET_FAILED");
+    }
+  });
+
+  // ==========================================================================
+  // Validate Loops Endpoint
+  // ==========================================================================
+
+  /**
+   * POST /api/config/validate-loops
+   *
+   * Validates that feedback loop commands exist and are executable.
+   *
+   * @param {{ loops: string[] }} body - Array of loop commands to validate
+   * @returns {{ results: { loop: string; valid: boolean; error?: string }[] }}
+   * @throws {400} If validation fails
+   * @throws {503} If orchestrator is not initialized
+   */
+  router.post("/validate-loops", async (c) => {
+    const orchestrator = getOrchestrator();
+    if (!orchestrator) {
+      throw new AppError(
+        "Orchestrator not initialized. Server may still be starting.",
+        503,
+        "SERVICE_UNAVAILABLE"
+      );
+    }
+
+    // Parse and validate request body
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      throw new AppError("Invalid JSON body", 400, "INVALID_JSON");
+    }
+
+    const parseResult = ValidateLoopsSchema.safeParse(body);
+    if (!parseResult.success) {
+      const errors = parseResult.error.errors.map((e) => ({
+        path: e.path.join("."),
+        message: e.message,
+      }));
+      throw new AppError(
+        `Validation failed: ${errors.map((e) => `${e.path}: ${e.message}`).join("; ")}`,
+        400,
+        "VALIDATION_ERROR"
+      );
+    }
+
+    const { loops } = parseResult.data;
+    const results: { loop: string; valid: boolean; error?: string }[] = [];
+
+    for (const loop of loops) {
+      try {
+        // Extract command name (first word) to check if it exists
+        const commandParts = loop.trim().split(/\s+/);
+        const commandName = commandParts[0] ?? "";
+
+        if (!commandName) {
+          results.push({
+            loop,
+            valid: false,
+            error: "Empty command",
+          });
+          continue;
+        }
+
+        // Use 'which' to check if command exists
+        const proc = Bun.spawnSync(["which", commandName], {
+          cwd: orchestrator.getWorkingDir(),
+        });
+
+        if (proc.exitCode === 0) {
+          results.push({ loop, valid: true });
+        } else {
+          // If 'which' fails, check if it's a package.json script
+          // by looking for common script runners
+          const isScriptRunner = ["npm", "bun", "yarn", "pnpm", "npx", "bunx"].includes(commandName);
+          if (isScriptRunner) {
+            results.push({ loop, valid: true });
+          } else {
+            results.push({
+              loop,
+              valid: false,
+              error: `Command '${commandName}' not found`,
+            });
+          }
+        }
+      } catch (error) {
+        results.push({
+          loop,
+          valid: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    }
+
+    return c.json({ results });
   });
 
   // ==========================================================================

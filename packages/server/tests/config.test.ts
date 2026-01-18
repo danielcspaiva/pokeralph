@@ -374,6 +374,181 @@ describe("Config Routes", () => {
     });
   });
 
+  describe("POST /api/config/reset", () => {
+    test("resets configuration to defaults", async () => {
+      // First modify the config
+      await app.fetch(
+        new Request("http://localhost/api/config", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            maxIterationsPerTask: 50,
+            mode: "yolo",
+            autoCommit: false,
+          }),
+        })
+      );
+
+      // Reset the config
+      const res = await app.fetch(
+        new Request("http://localhost/api/config/reset", {
+          method: "POST",
+        })
+      );
+
+      expect(res.status).toBe(200);
+
+      const data = await res.json();
+      expect(data.config.maxIterationsPerTask).toBe(DEFAULT_CONFIG.maxIterationsPerTask);
+      expect(data.config.mode).toBe(DEFAULT_CONFIG.mode);
+      expect(data.config.autoCommit).toBe(DEFAULT_CONFIG.autoCommit);
+      expect(data.config.feedbackLoops).toEqual(DEFAULT_CONFIG.feedbackLoops);
+    });
+
+    test("reset persists to file", async () => {
+      // Modify config
+      await app.fetch(
+        new Request("http://localhost/api/config", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ maxIterationsPerTask: 99 }),
+        })
+      );
+
+      // Reset
+      await app.fetch(
+        new Request("http://localhost/api/config/reset", {
+          method: "POST",
+        })
+      );
+
+      // Get config to verify persistence
+      const res = await app.fetch(new Request("http://localhost/api/config"));
+      const config = await res.json();
+
+      expect(config.maxIterationsPerTask).toBe(DEFAULT_CONFIG.maxIterationsPerTask);
+    });
+
+    test("returns 503 when orchestrator is not initialized", async () => {
+      resetServerState();
+
+      const res = await app.fetch(
+        new Request("http://localhost/api/config/reset", {
+          method: "POST",
+        })
+      );
+
+      expect(res.status).toBe(503);
+
+      const data = await res.json();
+      expect(data.error).toBe("SERVICE_UNAVAILABLE");
+    });
+  });
+
+  describe("POST /api/config/validate-loops", () => {
+    test("validates valid loop commands", async () => {
+      const res = await app.fetch(
+        new Request("http://localhost/api/config/validate-loops", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            loops: ["bun test", "bun run lint"],
+          }),
+        })
+      );
+
+      expect(res.status).toBe(200);
+
+      const data = await res.json();
+      expect(data.results).toHaveLength(2);
+      expect(data.results[0].loop).toBe("bun test");
+      expect(data.results[0].valid).toBe(true);
+      expect(data.results[1].loop).toBe("bun run lint");
+      expect(data.results[1].valid).toBe(true);
+    });
+
+    test("marks unknown commands as invalid", async () => {
+      const res = await app.fetch(
+        new Request("http://localhost/api/config/validate-loops", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            loops: ["nonexistent_command_12345"],
+          }),
+        })
+      );
+
+      expect(res.status).toBe(200);
+
+      const data = await res.json();
+      expect(data.results).toHaveLength(1);
+      expect(data.results[0].valid).toBe(false);
+      expect(data.results[0].error).toContain("not found");
+    });
+
+    test("returns 400 for invalid JSON", async () => {
+      const res = await app.fetch(
+        new Request("http://localhost/api/config/validate-loops", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "not valid json",
+        })
+      );
+
+      expect(res.status).toBe(400);
+
+      const data = await res.json();
+      expect(data.error).toBe("INVALID_JSON");
+    });
+
+    test("returns 400 for missing loops field", async () => {
+      const res = await app.fetch(
+        new Request("http://localhost/api/config/validate-loops", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        })
+      );
+
+      expect(res.status).toBe(400);
+
+      const data = await res.json();
+      expect(data.error).toBe("VALIDATION_ERROR");
+    });
+
+    test("returns 400 for empty loop command", async () => {
+      const res = await app.fetch(
+        new Request("http://localhost/api/config/validate-loops", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ loops: [""] }),
+        })
+      );
+
+      expect(res.status).toBe(400);
+
+      const data = await res.json();
+      expect(data.error).toBe("VALIDATION_ERROR");
+    });
+
+    test("returns 503 when orchestrator is not initialized", async () => {
+      resetServerState();
+
+      const res = await app.fetch(
+        new Request("http://localhost/api/config/validate-loops", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ loops: ["bun test"] }),
+        })
+      );
+
+      expect(res.status).toBe(503);
+
+      const data = await res.json();
+      expect(data.error).toBe("SERVICE_UNAVAILABLE");
+    });
+  });
+
   describe("Config persistence", () => {
     test("updated config persists across requests", async () => {
       // Update config
