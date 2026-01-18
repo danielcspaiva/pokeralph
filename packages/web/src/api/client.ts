@@ -139,6 +139,56 @@ export interface BattleHistoryResponse {
   history: Battle | null;
 }
 
+/**
+ * File summary in iteration (per spec 05-history.md)
+ */
+export interface FileSummary {
+  path: string;
+  action: "created" | "modified" | "deleted";
+  linesChanged?: number;
+  summary: string;
+}
+
+/**
+ * Feedback summary in iteration (per spec 05-history.md)
+ */
+export interface FeedbackSummary {
+  loop: string;
+  passed: boolean;
+  summary: string;
+  durationMs?: number;
+}
+
+/**
+ * Auto-generated iteration summary (per spec 05-history.md lines 434-444)
+ */
+export interface IterationSummary {
+  iterationNumber: number;
+  headline: string;
+  whatChanged: string[];
+  whyItHappened: string;
+  filesAffected: FileSummary[];
+  feedbackResults: FeedbackSummary[];
+  learnings?: string[];
+}
+
+/**
+ * Response for iteration summaries endpoint
+ */
+export interface IterationSummariesResponse {
+  taskId: string;
+  summaries: IterationSummary[];
+}
+
+/**
+ * Response for single iteration summary endpoint
+ */
+export interface SingleIterationSummaryResponse {
+  taskId: string;
+  iterationNumber: number;
+  summary: IterationSummary;
+}
+
 // ==========================================================================
 // API Client Configuration
 // ==========================================================================
@@ -742,6 +792,31 @@ export async function getBattleHistory(
 ): Promise<BattleHistoryResponse> {
   return request<BattleHistoryResponse>(
     `/api/battle/${encodeURIComponent(taskId)}/history`
+  );
+}
+
+/**
+ * Gets auto-generated summaries for all iterations in a battle
+ * Per spec 05-history.md lines 427-531 (Learning Tool Features)
+ */
+export async function getIterationSummaries(
+  taskId: string
+): Promise<IterationSummariesResponse> {
+  return request<IterationSummariesResponse>(
+    `/api/battle/${encodeURIComponent(taskId)}/summaries`
+  );
+}
+
+/**
+ * Gets auto-generated summary for a specific iteration
+ * Per spec 05-history.md lines 427-531 (Learning Tool Features)
+ */
+export async function getIterationSummary(
+  taskId: string,
+  iterationNumber: number
+): Promise<SingleIterationSummaryResponse> {
+  return request<SingleIterationSummaryResponse>(
+    `/api/battle/${encodeURIComponent(taskId)}/iteration/${iterationNumber}/summary`
   );
 }
 

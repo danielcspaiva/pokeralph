@@ -169,6 +169,21 @@ export {
   type TaskRecommendation,
   type ProjectContext,
   type RecommendationsResult,
+  // SummaryService
+  generateIterationSummary,
+  generateBattleSummaries,
+  parseClaudeActions,
+  parseDiffSummary,
+  extractReasoning,
+  extractLearnings,
+  generateHeadline,
+  summarizeFeedbackResults,
+  buildFileSummariesFromIteration,
+  type IterationSummary,
+  type FileSummary,
+  type FeedbackSummary,
+  type ClaudeAction,
+  type SummaryContext,
 } from "./services/index.ts";
 
 // Re-export all types

@@ -9,6 +9,10 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getOrchestrator } from "../index.ts";
 import { AppError } from "../middleware/error-handler.ts";
+import {
+  generateIterationSummary,
+  generateBattleSummaries,
+} from "@pokeralph/core";
 
 /**
  * Schema for starting a battle
@@ -330,6 +334,123 @@ export function createBattleRoutes(): Hono {
     return c.json({
       taskId,
       history,
+    });
+  });
+
+  /**
+   * GET /api/battle/:taskId/summaries
+   *
+   * Returns auto-generated summaries for all iterations in a battle.
+   * Per spec 05-history.md lines 427-531 (Learning Tool Features).
+   *
+   * @param {string} taskId - The task ID (URL parameter)
+   * @returns {{ taskId: string, summaries: IterationSummary[] }}
+   * @throws {404} If task doesn't exist or has no history
+   * @throws {503} If orchestrator is not initialized
+   */
+  router.get("/:taskId/summaries", async (c) => {
+    const orchestrator = requireOrchestrator();
+    const taskId = c.req.param("taskId");
+
+    // Verify task exists
+    const task = await orchestrator.getTask(taskId);
+    if (!task) {
+      throw new AppError(
+        `Task "${taskId}" not found`,
+        404,
+        "TASK_NOT_FOUND"
+      );
+    }
+
+    // Get battle history
+    const history = await orchestrator.getBattleHistory(taskId);
+    if (!history || history.iterations.length === 0) {
+      return c.json({
+        taskId,
+        summaries: [],
+      });
+    }
+
+    // Build output map from iterations
+    const outputs = new Map<number, string>();
+    for (const iteration of history.iterations) {
+      outputs.set(iteration.number, iteration.output || "");
+    }
+
+    // Generate summaries for all iterations
+    const summaries = generateBattleSummaries(history.iterations, outputs);
+
+    return c.json({
+      taskId,
+      summaries,
+    });
+  });
+
+  /**
+   * GET /api/battle/:taskId/iteration/:number/summary
+   *
+   * Returns auto-generated summary for a specific iteration.
+   * Per spec 05-history.md lines 427-531 (Learning Tool Features).
+   *
+   * @param {string} taskId - The task ID (URL parameter)
+   * @param {number} number - The iteration number (URL parameter)
+   * @returns {{ taskId: string, iterationNumber: number, summary: IterationSummary }}
+   * @throws {404} If task or iteration doesn't exist
+   * @throws {503} If orchestrator is not initialized
+   */
+  router.get("/:taskId/iteration/:number/summary", async (c) => {
+    const orchestrator = requireOrchestrator();
+    const taskId = c.req.param("taskId");
+    const iterationNumber = Number.parseInt(c.req.param("number"), 10);
+
+    if (Number.isNaN(iterationNumber) || iterationNumber < 1) {
+      throw new AppError(
+        "Invalid iteration number",
+        400,
+        "INVALID_ITERATION_NUMBER"
+      );
+    }
+
+    // Verify task exists
+    const task = await orchestrator.getTask(taskId);
+    if (!task) {
+      throw new AppError(
+        `Task "${taskId}" not found`,
+        404,
+        "TASK_NOT_FOUND"
+      );
+    }
+
+    // Get battle history
+    const history = await orchestrator.getBattleHistory(taskId);
+    if (!history) {
+      throw new AppError(
+        `No battle history for task "${taskId}"`,
+        404,
+        "NO_HISTORY"
+      );
+    }
+
+    // Find the iteration
+    const iteration = history.iterations.find((i) => i.number === iterationNumber);
+    if (!iteration) {
+      throw new AppError(
+        `Iteration ${iterationNumber} not found for task "${taskId}"`,
+        404,
+        "ITERATION_NOT_FOUND"
+      );
+    }
+
+    // Generate summary for this iteration
+    const summary = generateIterationSummary({
+      iteration,
+      output: iteration.output || "",
+    });
+
+    return c.json({
+      taskId,
+      iterationNumber,
+      summary,
     });
   });
 

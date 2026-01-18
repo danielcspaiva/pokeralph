@@ -23,13 +23,22 @@ import {
   Timer,
   Copy,
   CheckCircle,
+  Lightbulb,
+  Sparkles,
+  Info,
 } from "lucide-react";
 import {
   useTask,
   useBattleHistory,
   useAppStore,
 } from "@/stores/app-store";
-import { getTask, getBattleHistory, startBattle } from "@/api/client";
+import {
+  getTask,
+  getBattleHistory,
+  startBattle,
+  getIterationSummaries,
+  type IterationSummary,
+} from "@/api/client";
 import {
   type Task,
   type Battle,
@@ -183,6 +192,145 @@ function FeedbackResultsDisplay({ feedbackResults }: FeedbackResultsDisplayProps
 }
 
 /**
+ * Display auto-generated iteration summary (per spec 05-history.md lines 427-531)
+ */
+interface IterationSummaryCardProps {
+  summary: IterationSummary;
+}
+
+function IterationSummaryCard({ summary }: IterationSummaryCardProps) {
+  return (
+    <div className="space-y-4 rounded-lg border border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--primary)/0.05)] p-4">
+      <div className="flex items-center gap-2">
+        <Sparkles className="h-4 w-4 text-[hsl(var(--primary))]" />
+        <span className="text-sm font-medium text-[hsl(var(--primary))]">
+          AI Summary
+        </span>
+      </div>
+
+      {/* Headline */}
+      <div>
+        <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+          <Info className="h-3 w-3" />
+          Headline
+        </div>
+        <p className="mt-1 font-medium">{summary.headline}</p>
+      </div>
+
+      {/* What Changed */}
+      {summary.whatChanged.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+            <FileText className="h-3 w-3" />
+            What Changed
+          </div>
+          <ul className="mt-1 space-y-1">
+            {summary.whatChanged.map((change) => (
+              <li key={change} className="flex items-start gap-2 text-sm">
+                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--primary))]" />
+                {change}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Why It Happened */}
+      <div>
+        <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+          <Info className="h-3 w-3" />
+          Why
+        </div>
+        <p className="mt-1 text-sm">{summary.whyItHappened}</p>
+      </div>
+
+      {/* Files Affected Summary */}
+      {summary.filesAffected.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+            <FileText className="h-3 w-3" />
+            Files Affected ({summary.filesAffected.length})
+          </div>
+          <ul className="mt-1 space-y-1">
+            {summary.filesAffected.slice(0, 5).map((file) => (
+              <li key={file.path} className="flex items-center gap-2 text-sm">
+                <span
+                  className={cn(
+                    "rounded px-1.5 py-0.5 text-xs font-medium",
+                    file.action === "created"
+                      ? "bg-[hsl(var(--success)/0.2)] text-[hsl(var(--success))]"
+                      : file.action === "deleted"
+                        ? "bg-[hsl(var(--destructive)/0.2)] text-[hsl(var(--destructive))]"
+                        : "bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]"
+                  )}
+                >
+                  {file.action}
+                </span>
+                <span className="truncate">{file.path}</span>
+                {file.linesChanged !== undefined && (
+                  <span className="text-[hsl(var(--muted-foreground))]">
+                    ({file.linesChanged} lines)
+                  </span>
+                )}
+              </li>
+            ))}
+            {summary.filesAffected.length > 5 && (
+              <li className="text-sm text-[hsl(var(--muted-foreground))]">
+                +{summary.filesAffected.length - 5} more files
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      {/* Feedback Results Summary */}
+      {summary.feedbackResults.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+            <Check className="h-3 w-3" />
+            Feedback
+          </div>
+          <div className="mt-1 flex flex-wrap gap-2">
+            {summary.feedbackResults.map((fb) => (
+              <span
+                key={fb.loop}
+                className={cn(
+                  "rounded px-2 py-1 text-xs font-medium",
+                  fb.passed
+                    ? "bg-[hsl(var(--success)/0.2)] text-[hsl(var(--success))]"
+                    : "bg-[hsl(var(--destructive)/0.2)] text-[hsl(var(--destructive))]"
+                )}
+              >
+                {fb.loop}: {fb.summary}
+                {fb.durationMs !== undefined && ` (${formatDuration(fb.durationMs)})`}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Learnings */}
+      {summary.learnings && summary.learnings.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+            <Lightbulb className="h-3 w-3" />
+            Learnings
+          </div>
+          <ul className="mt-1 space-y-1">
+            {summary.learnings.map((learning) => (
+              <li key={learning} className="flex items-start gap-2 text-sm">
+                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[hsl(var(--warning))]" />
+                {learning}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * Task info header
  */
 interface TaskHeaderProps {
@@ -266,6 +414,8 @@ interface IterationItemProps {
   onToggle: () => void;
   isFirst: boolean;
   isLast: boolean;
+  summary?: IterationSummary;
+  showSummary: boolean;
 }
 
 function IterationItem({
@@ -274,6 +424,8 @@ function IterationItem({
   onToggle,
   isFirst: _isFirst,
   isLast,
+  summary,
+  showSummary,
 }: IterationItemProps) {
   const [outputSearch, setOutputSearch] = useState("");
   const [copied, setCopied] = useState(false);
@@ -369,6 +521,11 @@ function IterationItem({
 
         {isExpanded && (
           <div className="mt-2 space-y-4 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] p-4">
+            {/* AI-generated summary (per spec 05-history.md) */}
+            {showSummary && summary && (
+              <IterationSummaryCard summary={summary} />
+            )}
+
             {/* Error message if present */}
             {iteration.error && (
               <div>
@@ -478,9 +635,17 @@ function IterationItem({
  */
 interface IterationTimelineProps {
   iterations: Iteration[];
+  summaries?: Map<number, IterationSummary>;
+  showSummaries: boolean;
+  onToggleSummaries: () => void;
 }
 
-function IterationTimeline({ iterations }: IterationTimelineProps) {
+function IterationTimeline({
+  iterations,
+  summaries,
+  showSummaries,
+  onToggleSummaries,
+}: IterationTimelineProps) {
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
 
   const toggleItem = (number: number) => {
@@ -518,6 +683,15 @@ function IterationTimeline({ iterations }: IterationTimelineProps) {
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold">Iteration History</h2>
         <div className="flex gap-2">
+          <Button
+            variant={showSummaries ? "default" : "outline"}
+            size="sm"
+            onClick={onToggleSummaries}
+            title="Toggle AI-generated summaries"
+          >
+            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+            {showSummaries ? "Hide Summaries" : "Show Summaries"}
+          </Button>
           <Button variant="outline" size="sm" onClick={expandAll}>
             Expand All
           </Button>
@@ -535,6 +709,8 @@ function IterationTimeline({ iterations }: IterationTimelineProps) {
             onToggle={() => toggleItem(iteration.number)}
             isFirst={idx === 0}
             isLast={idx === iterations.length - 1}
+            summary={summaries?.get(iteration.number)}
+            showSummary={showSummaries}
           />
         ))}
       </div>
@@ -641,6 +817,30 @@ export function History() {
   const [history, setHistory] = useState<Battle | null>(storeHistory);
   const [isLoading, setIsLoading] = useState(true);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [showSummaries, setShowSummaries] = useState(false);
+  const [summaries, setSummaries] = useState<Map<number, IterationSummary>>(new Map());
+  const [summariesLoaded, setSummariesLoaded] = useState(false);
+
+  // Load summaries when toggled on
+  useEffect(() => {
+    async function loadSummaries() {
+      if (!taskId || !showSummaries || summariesLoaded) return;
+
+      try {
+        const response = await getIterationSummaries(taskId);
+        const summaryMap = new Map<number, IterationSummary>();
+        for (const summary of response.summaries) {
+          summaryMap.set(summary.iterationNumber, summary);
+        }
+        setSummaries(summaryMap);
+        setSummariesLoaded(true);
+      } catch (err) {
+        console.error("Failed to load summaries:", err);
+      }
+    }
+
+    loadSummaries();
+  }, [taskId, showSummaries, summariesLoaded]);
 
   // Load task and history on mount
   useEffect(() => {
@@ -732,7 +932,12 @@ export function History() {
 
       {/* Timeline or empty state */}
       {history && history.iterations.length > 0 ? (
-        <IterationTimeline iterations={history.iterations} />
+        <IterationTimeline
+          iterations={history.iterations}
+          summaries={summaries}
+          showSummaries={showSummaries}
+          onToggleSummaries={() => setShowSummaries(!showSummaries)}
+        />
       ) : (
         <NoHistoryState
           task={task}

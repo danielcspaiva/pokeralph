@@ -216,6 +216,24 @@ export {
   type CheckpointRetentionPolicy,
 } from "./checkpoint-service.ts";
 
+// SummaryService - generates iteration summaries for battle history
+export {
+  generateIterationSummary,
+  generateBattleSummaries,
+  parseClaudeActions,
+  parseDiffSummary,
+  extractReasoning,
+  extractLearnings,
+  generateHeadline,
+  summarizeFeedbackResults,
+  buildFileSummariesFromIteration,
+  type IterationSummary,
+  type FileSummary,
+  type FeedbackSummary,
+  type ClaudeAction,
+  type SummaryContext,
+} from "./summary-service.ts";
+
 // Custom error classes
 export { FileNotFoundError, ValidationError } from "./errors.ts";
 
