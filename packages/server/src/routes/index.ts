@@ -31,6 +31,7 @@ export function createRoutes(): Hono {
         repo: "POST /api/repo/select, /init; GET /api/repo/current, /validate, /recent; DELETE /api/repo/recent/:path",
         prd: "GET/PUT /api/prd",
         tasks: "GET/POST /api/prd/tasks, GET/PUT/DELETE /api/prd/tasks/:id",
+        recommendations: "GET /api/prd/recommendations, GET /api/prd/recommendations/top",
         planning:
           "POST /api/planning/start, /answer, /finish, /reset; GET /api/planning/status",
         battle:

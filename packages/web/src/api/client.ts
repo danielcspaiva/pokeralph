@@ -1067,3 +1067,84 @@ export async function validatePreflightToken(
 export async function getPreflightChecks(): Promise<PreflightChecksResponse> {
   return request<PreflightChecksResponse>("/api/preflight/checks");
 }
+
+// ==========================================================================
+// Recommendation Endpoints (Task 030)
+// Based on SPECS/04-dashboard.md (Smart Task Management section, lines 521-623)
+// ==========================================================================
+
+/**
+ * Recommendation reason type
+ */
+export type RecommendationReasonType =
+  | "priority"
+  | "dependency"
+  | "risk"
+  | "momentum"
+  | "blocking";
+
+/**
+ * Individual reason contributing to recommendation score
+ */
+export interface RecommendationReason {
+  type: RecommendationReasonType;
+  label: string;
+  impact: number; // -100 to +100
+}
+
+/**
+ * Task risk assessment
+ */
+export interface TaskRisk {
+  level: "low" | "medium" | "high";
+  recommendation: string;
+  factors: Array<{
+    name: string;
+    impact: "low" | "medium" | "high";
+    description: string;
+  }>;
+}
+
+/**
+ * Task recommendation with score and reasoning
+ */
+export interface TaskRecommendation {
+  task: Task;
+  score: number;
+  reasons: RecommendationReason[];
+  suggestedMode: "hitl" | "yolo";
+  risk: TaskRisk;
+}
+
+/**
+ * Recommendations result containing sorted list
+ */
+export interface RecommendationsResult {
+  /** Recommended tasks sorted by score (highest first) */
+  recommendations: TaskRecommendation[];
+  /** The top recommended task, if any */
+  topRecommendation: TaskRecommendation | null;
+}
+
+/**
+ * Response from top recommendation endpoint
+ */
+export interface TopRecommendationResponse {
+  recommendation: TaskRecommendation | null;
+}
+
+/**
+ * Gets task recommendations for all pending tasks
+ * Sorted by score with highest scored task first
+ */
+export async function getTaskRecommendations(): Promise<RecommendationsResult> {
+  return request<RecommendationsResult>("/api/prd/recommendations");
+}
+
+/**
+ * Gets only the top recommended task
+ * Convenience function for quick task selection
+ */
+export async function getTopRecommendation(): Promise<TopRecommendationResponse> {
+  return request<TopRecommendationResponse>("/api/prd/recommendations/top");
+}

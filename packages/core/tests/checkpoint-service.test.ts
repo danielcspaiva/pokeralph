@@ -605,7 +605,7 @@ describe("validateCheckpoint", () => {
 
   test("fails checkpoint without ID", () => {
     const checkpoint = createTestCheckpoint(1);
-    // @ts-expect-error - intentionally testing invalid state
+    // Setting empty string for ID to test validation
     checkpoint.id = "";
 
     const result = validateCheckpoint(checkpoint);

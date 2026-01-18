@@ -7,7 +7,7 @@
 
 import { Hono } from "hono";
 import { z } from "zod";
-import { PRDSchema, TaskStatus } from "@pokeralph/core";
+import { PRDSchema, TaskStatus, getTaskRecommendations, getTopRecommendation } from "@pokeralph/core";
 import { getOrchestrator } from "../index.ts";
 import { AppError } from "../middleware/error-handler.ts";
 
@@ -344,6 +344,63 @@ export function createPRDRoutes(): Hono {
     await orchestrator.savePRD(prd);
 
     return new Response(null, { status: 204 });
+  });
+
+  // ==========================================================================
+  // Recommendation Endpoints (Task 030)
+  // Based on SPECS/04-dashboard.md (Smart Task Management section, lines 521-623)
+  // ==========================================================================
+
+  /**
+   * GET /api/prd/recommendations
+   *
+   * Returns task recommendations for all pending tasks.
+   * Sorted by score with highest scored task first.
+   *
+   * @returns {RecommendationsResult} Recommendations with top pick
+   * @throws {404} If no PRD exists
+   * @throws {503} If orchestrator is not initialized
+   */
+  router.get("/recommendations", async (c) => {
+    const orchestrator = requireOrchestrator();
+
+    const prd = await orchestrator.getPRD();
+    if (!prd) {
+      throw new AppError(
+        "No PRD found. Create a PRD first.",
+        404,
+        "PRD_NOT_FOUND"
+      );
+    }
+
+    const recommendations = getTaskRecommendations(prd);
+    return c.json(recommendations);
+  });
+
+  /**
+   * GET /api/prd/recommendations/top
+   *
+   * Returns only the top recommended task.
+   * Convenience endpoint for quick task selection.
+   *
+   * @returns {TaskRecommendation | null} The top recommendation or null
+   * @throws {404} If no PRD exists
+   * @throws {503} If orchestrator is not initialized
+   */
+  router.get("/recommendations/top", async (c) => {
+    const orchestrator = requireOrchestrator();
+
+    const prd = await orchestrator.getPRD();
+    if (!prd) {
+      throw new AppError(
+        "No PRD found. Create a PRD first.",
+        404,
+        "PRD_NOT_FOUND"
+      );
+    }
+
+    const topRecommendation = getTopRecommendation(prd);
+    return c.json({ recommendation: topRecommendation });
   });
 
   return router;

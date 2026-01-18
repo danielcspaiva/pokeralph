@@ -155,6 +155,20 @@ export {
   type RollbackResult,
   type RollbackOptions,
   type CheckpointRetentionPolicy,
+  // RecommendationService
+  computeTaskRecommendation,
+  buildProjectContext,
+  getTaskRecommendations,
+  getTopRecommendation,
+  extractDependencies,
+  checkDependencies,
+  countBlockedTasks,
+  calculateMomentum,
+  type RecommendationReasonType,
+  type RecommendationReason,
+  type TaskRecommendation,
+  type ProjectContext,
+  type RecommendationsResult,
 } from "./services/index.ts";
 
 // Re-export all types

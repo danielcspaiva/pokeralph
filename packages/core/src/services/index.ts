@@ -173,6 +173,23 @@ export {
   type VerifyManualFixResult,
 } from "./recovery-service.ts";
 
+// RecommendationService - computes task recommendations
+export {
+  computeTaskRecommendation,
+  buildProjectContext,
+  getTaskRecommendations,
+  getTopRecommendation,
+  extractDependencies,
+  checkDependencies,
+  countBlockedTasks,
+  calculateMomentum,
+  type RecommendationReasonType,
+  type RecommendationReason,
+  type TaskRecommendation,
+  type ProjectContext,
+  type RecommendationsResult,
+} from "./recommendation-service.ts";
+
 // CheckpointService - manages battle checkpoints for recovery
 export {
   // Storage implementations

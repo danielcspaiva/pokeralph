@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Play, ClipboardList, Loader2, Search, ArrowUpDown } from "lucide-react";
+import { Plus, Play, ClipboardList, Loader2, Search, ArrowUpDown, Sparkles, ChevronDown, ChevronUp } from "lucide-react";
 import {
   usePRD,
   useTasks,
@@ -16,7 +16,8 @@ import {
   useIsBattleRunning,
   useAppStore,
 } from "@/stores/app-store";
-import { getPRD, startBattle } from "@/api/client";
+import { getPRD, startBattle, getTopRecommendation } from "@/api/client";
+import type { TaskRecommendation } from "@/api/client";
 import type { Task } from "@pokeralph/core/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -172,6 +173,155 @@ function StatCard({ label, value, variant = "default" }: StatCardProps) {
 }
 
 /**
+ * Recommendation card component per spec (04-dashboard.md lines 599-622)
+ */
+interface RecommendationCardProps {
+  recommendation: TaskRecommendation;
+  onStartBattle: (mode: "hitl" | "yolo") => void;
+  isStarting: boolean;
+  isBattleRunning: boolean;
+}
+
+function RecommendationCard({
+  recommendation,
+  onStartBattle,
+  isStarting,
+  isBattleRunning,
+}: RecommendationCardProps) {
+  const [expanded, setExpanded] = useState(false);
+  const { task, score, reasons, suggestedMode, risk } = recommendation;
+
+  // Risk indicator dots per spec (04-dashboard.md lines 875-884)
+  const riskDots = {
+    low: (
+      <span className="inline-flex gap-0.5">
+        <span className="w-2 h-2 rounded-full bg-[hsl(var(--success))]" />
+        <span className="w-2 h-2 rounded-full bg-[hsl(var(--screen-muted))]" />
+        <span className="w-2 h-2 rounded-full bg-[hsl(var(--screen-muted))]" />
+      </span>
+    ),
+    medium: (
+      <span className="inline-flex gap-0.5">
+        <span className="w-2 h-2 rounded-full bg-[hsl(var(--primary))]" />
+        <span className="w-2 h-2 rounded-full bg-[hsl(var(--primary))]" />
+        <span className="w-2 h-2 rounded-full bg-[hsl(var(--screen-muted))]" />
+      </span>
+    ),
+    high: (
+      <span className="inline-flex gap-0.5">
+        <span className="w-2 h-2 rounded-full bg-[hsl(var(--destructive))]" />
+        <span className="w-2 h-2 rounded-full bg-[hsl(var(--destructive))]" />
+        <span className="w-2 h-2 rounded-full bg-[hsl(var(--destructive))]" />
+      </span>
+    ),
+  };
+
+  return (
+    <Card className="border-[hsl(var(--primary))] border-2">
+      <CardContent className="p-4 space-y-3">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-[hsl(var(--primary))]" />
+            <span className="text-sm font-medium text-[hsl(var(--primary))]">
+              Recommended Next Task
+            </span>
+          </div>
+          <Badge variant="outline" className="text-xs">
+            Score: {score}
+          </Badge>
+        </div>
+
+        {/* Task info */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-[hsl(var(--screen-fg))]">{task.title}</span>
+            <span className="text-xs text-[hsl(var(--screen-muted-fg))]">#{task.id}</span>
+          </div>
+          <p className="text-sm text-[hsl(var(--screen-muted-fg))] line-clamp-2">
+            {task.description}
+          </p>
+        </div>
+
+        {/* Risk and mode */}
+        <div className="flex items-center gap-4 text-xs">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[hsl(var(--screen-muted-fg))]">Risk:</span>
+            {riskDots[risk.level]}
+            <span className={cn(
+              "capitalize",
+              risk.level === "low" && "text-[hsl(var(--success))]",
+              risk.level === "medium" && "text-[hsl(var(--primary))]",
+              risk.level === "high" && "text-[hsl(var(--destructive))]"
+            )}>
+              {risk.level}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[hsl(var(--screen-muted-fg))]">Suggested:</span>
+            <Badge variant={suggestedMode === "yolo" ? "default" : "secondary"} className="text-xs py-0">
+              {suggestedMode.toUpperCase()}
+            </Badge>
+          </div>
+        </div>
+
+        {/* Reasons (expandable) */}
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="flex items-center gap-1 text-xs text-[hsl(var(--screen-muted-fg))] hover:text-[hsl(var(--screen-fg))] transition-colors"
+        >
+          {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          {expanded ? "Hide reasons" : "Why this task?"}
+        </button>
+
+        {expanded && (
+          <div className="space-y-1 text-xs pl-4 border-l-2 border-[hsl(var(--screen-border))]">
+            {reasons.map((reason) => (
+              <div key={`${reason.type}-${reason.label}`} className="flex items-center justify-between">
+                <span className="text-[hsl(var(--screen-muted-fg))]">
+                  {reason.impact > 0 ? "+" : ""}{reason.label}
+                </span>
+                <span className={cn(
+                  "font-mono",
+                  reason.impact > 0 ? "text-[hsl(var(--success))]" : "text-[hsl(var(--destructive))]"
+                )}>
+                  {reason.impact > 0 ? "+" : ""}{reason.impact}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 pt-2">
+          <Button
+            onClick={() => onStartBattle(suggestedMode)}
+            disabled={isBattleRunning || isStarting}
+            className="flex-1"
+          >
+            {isStarting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Starting...
+              </>
+            ) : (
+              <>
+                <Play className="mr-2 h-4 w-4" />
+                Start Battle ({suggestedMode.toUpperCase()})
+              </>
+            )}
+          </Button>
+          <Button variant="outline" asChild>
+            <Link to={`/task/${task.id}`}>Details</Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
  * Task list item component
  */
 interface TaskListItemProps {
@@ -275,21 +425,32 @@ export function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isStartingBattle, setIsStartingBattle] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [recommendation, setRecommendation] = useState<TaskRecommendation | null>(null);
 
-  // Load PRD on mount
+  // Load PRD and recommendation on mount
   useEffect(() => {
-    async function loadPRD() {
+    async function loadData() {
       try {
         const data = await getPRD();
         setPRD(data);
+
+        // Fetch recommendation after PRD loads
+        try {
+          const recResponse = await getTopRecommendation();
+          setRecommendation(recResponse.recommendation);
+        } catch {
+          // Recommendation fetch failed, just continue without it
+          setRecommendation(null);
+        }
       } catch {
         // PRD doesn't exist yet, show empty state
         setPRD(null);
+        setRecommendation(null);
       } finally {
         setIsLoading(false);
       }
     }
-    loadPRD();
+    loadData();
   }, [setPRD]);
 
   // Persist filter/sort preferences per spec (04-dashboard.md line 51)
@@ -327,6 +488,21 @@ export function Dashboard() {
       navigate(`/task/${nextTask.id}`);
     } catch (error) {
       console.error("Failed to start battle:", error);
+    } finally {
+      setIsStartingBattle(false);
+    }
+  };
+
+  // Handle starting recommended battle with specific mode
+  const handleStartRecommendedBattle = async (mode: "hitl" | "yolo") => {
+    if (!recommendation || isBattleRunning) return;
+
+    setIsStartingBattle(true);
+    try {
+      await startBattle(recommendation.task.id, mode);
+      navigate(`/task/${recommendation.task.id}`);
+    } catch (error) {
+      console.error("Failed to start recommended battle:", error);
     } finally {
       setIsStartingBattle(false);
     }
@@ -401,6 +577,16 @@ export function Dashboard() {
         <StatCard label="Done" value={counts.completed} variant="success" />
         <StatCard label="Failed" value={counts.failed} variant="error" />
       </div>
+
+      {/* Recommendation card per spec (04-dashboard.md lines 521-623) */}
+      {recommendation && !isBattleRunning && (
+        <RecommendationCard
+          recommendation={recommendation}
+          onStartBattle={handleStartRecommendedBattle}
+          isStarting={isStartingBattle}
+          isBattleRunning={isBattleRunning}
+        />
+      )}
 
       {/* Task filters, search, and sort per spec (04-dashboard.md lines 213-216) */}
       <div className="space-y-3">
