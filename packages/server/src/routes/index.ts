@@ -10,6 +10,7 @@ import { createConfigRoutes } from "./config.ts";
 import { createPRDRoutes } from "./prd.ts";
 import { createPlanningRoutes } from "./planning.ts";
 import { createBattleRoutes } from "./battle.ts";
+import { createRepoRoutes } from "./repo.ts";
 
 /**
  * Creates the main API router with all routes grouped.
@@ -25,6 +26,7 @@ export function createRoutes(): Hono {
       endpoints: {
         health: "GET /health",
         config: "GET/PUT /api/config",
+        repo: "POST /api/repo/select, /init; GET /api/repo/current, /validate, /recent; DELETE /api/repo/recent/:path",
         prd: "GET/PUT /api/prd",
         tasks: "GET/POST /api/prd/tasks, GET/PUT/DELETE /api/prd/tasks/:id",
         planning:
@@ -38,6 +40,10 @@ export function createRoutes(): Hono {
   // Config routes (Task 013)
   const configRoutes = createConfigRoutes();
   api.route("/config", configRoutes);
+
+  // Repository routes (Task 020)
+  const repoRoutes = createRepoRoutes();
+  api.route("/repo", repoRoutes);
 
   // PRD and Tasks routes (Task 014)
   const prdRoutes = createPRDRoutes();

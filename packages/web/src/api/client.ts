@@ -308,11 +308,136 @@ export async function resetConfig(): Promise<Config> {
 }
 
 // ==========================================================================
-// Working Directory Endpoints
+// Repository Endpoints (per spec 08-repositories.md)
+// ==========================================================================
+
+/**
+ * Recent repository entry
+ */
+export interface RecentRepo {
+  path: string;
+  name: string;
+  lastUsed: string; // ISO timestamp
+  taskCount: number;
+}
+
+/**
+ * Repository validation result
+ */
+export interface ValidateRepoResponse {
+  valid: boolean;
+  exists: boolean;
+  isDirectory: boolean;
+  isGitRepo: boolean;
+  hasPokeralph: boolean;
+  errors: string[];
+}
+
+/**
+ * Select repository response
+ */
+export interface SelectRepoResponse {
+  success: boolean;
+  workingDir: string;
+  initialized: boolean;
+  config: Config | null;
+  prd: PRD | null;
+  taskCount: number;
+  hasActiveBattle: boolean;
+}
+
+/**
+ * Current repository response
+ */
+export interface CurrentRepoResponse {
+  workingDir: string | null;
+  initialized: boolean;
+  config: Config | null;
+  prd: PRD | null;
+  taskCount: number;
+  hasActiveBattle: boolean;
+}
+
+/**
+ * Recent repositories response
+ */
+export interface RecentReposResponse {
+  repos: RecentRepo[];
+}
+
+/**
+ * Init repository response
+ */
+export interface InitRepoResponse {
+  success: boolean;
+  message: string;
+}
+
+/**
+ * Selects and initializes a repository
+ *
+ * @param path - Absolute path to the repository
+ */
+export async function selectRepo(path: string): Promise<SelectRepoResponse> {
+  return request<SelectRepoResponse>("/api/repo/select", {
+    method: "POST",
+    body: JSON.stringify({ path }),
+  });
+}
+
+/**
+ * Gets the current repository info
+ */
+export async function getCurrentRepo(): Promise<CurrentRepoResponse> {
+  return request<CurrentRepoResponse>("/api/repo/current");
+}
+
+/**
+ * Initializes .pokeralph/ in the current repository
+ */
+export async function initRepo(): Promise<InitRepoResponse> {
+  return request<InitRepoResponse>("/api/repo/init", {
+    method: "POST",
+  });
+}
+
+/**
+ * Validates a path as a potential repository
+ *
+ * @param path - Path to validate
+ */
+export async function validateRepo(path: string): Promise<ValidateRepoResponse> {
+  return request<ValidateRepoResponse>(
+    `/api/repo/validate?path=${encodeURIComponent(path)}`
+  );
+}
+
+/**
+ * Gets recently used repositories
+ */
+export async function getRecentRepos(): Promise<RecentReposResponse> {
+  return request<RecentReposResponse>("/api/repo/recent");
+}
+
+/**
+ * Removes a repository from the recent list
+ *
+ * @param path - Path of the repository to remove
+ */
+export async function removeRecentRepo(path: string): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>(
+    `/api/repo/recent/${encodeURIComponent(path)}`,
+    { method: "DELETE" }
+  );
+}
+
+// ==========================================================================
+// Legacy Working Directory Endpoints (kept for backwards compatibility)
 // ==========================================================================
 
 /**
  * Working directory response type
+ * @deprecated Use getCurrentRepo() instead
  */
 export interface WorkingDirResponse {
   workingDir: string;
@@ -321,6 +446,7 @@ export interface WorkingDirResponse {
 
 /**
  * Working directory change response type
+ * @deprecated Use selectRepo() instead
  */
 export interface WorkingDirChangeResponse {
   success: boolean;
@@ -329,6 +455,7 @@ export interface WorkingDirChangeResponse {
 
 /**
  * Gets the current working directory
+ * @deprecated Use getCurrentRepo() instead
  */
 export async function getWorkingDir(): Promise<WorkingDirResponse> {
   return request<WorkingDirResponse>("/api/config/working-dir");
@@ -336,6 +463,7 @@ export async function getWorkingDir(): Promise<WorkingDirResponse> {
 
 /**
  * Changes the working directory to a new path
+ * @deprecated Use selectRepo() instead
  *
  * @param path - The new working directory path (can be relative or absolute)
  */
