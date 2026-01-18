@@ -498,5 +498,149 @@
 - Lint: PASS (0 new errors - pre-existing web package lint warnings)
 - Tests: 634 pass, 0 fail
 
-**Commit:** (pending)
+**Commit:** 3fb7ed9
+
+## Task 012: Verify Git integration against spec - COMPLETED
+
+**Spec:** 03-battles.md
+**Files Modified:**
+- packages/core/src/services/battle-orchestrator.ts
+- packages/core/tests/battle-orchestrator.test.ts
+
+**Changes Made:**
+1. Enhanced auto-commit error handling per spec (03-battles.md lines 1421-1430):
+   - NOT_GIT_REPO: Emit error when autoCommit enabled but not in git repo
+   - COMMIT_FAILED: Emit error when git commit fails (continue without commit)
+   - No changes: Silent skip when nothing to commit
+
+2. Restructured executeIteration() git logic:
+   - Check isRepo() BEFORE getting git status when autoCommit enabled
+   - Properly handles non-git directories without crashing
+   - Maintains backward compatibility with existing behavior
+
+3. Added comprehensive git integration tests:
+   - emits NOT_GIT_REPO error when autoCommit enabled but not in git repo
+   - emits COMMIT_FAILED error when git commit fails
+   - skips commit silently when no changes to commit
+   - uses correct commit message format per spec
+
+**Verification against spec (03-battles.md lines 95-99, 1421-1430):**
+- Commit format per spec: `[PokéRalph] {taskId}: {title}` ✓
+- autoCommit toggle works: Checks config.autoCommit before attempting commit ✓
+- Staging behavior per spec: Uses gitService.add() with filtered file list ✓
+- Error handling per spec:
+  - Not a git repo → Emit NOT_GIT_REPO error, skip commit ✓
+  - No changes → Silent skip ✓
+  - Commit failed → Emit COMMIT_FAILED error, continue without commit ✓
+
+**Acceptance Criteria Status:**
+- [x] Commit format per spec
+- [x] autoCommit toggle works
+- [x] Staging behavior per spec
+- [x] Error handling per spec
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 new errors in changed files)
+- Tests: 638 pass, 0 fail
+
+**Commit:** c014c94
+
+## Task 013: Verify WebSocket server against spec - COMPLETED
+
+**Spec:** 07-websocket.md
+**Files Modified:**
+- packages/core/src/orchestrator.ts
+- packages/server/src/websocket/index.ts
+
+**Changes Made:**
+1. Added missing `onPlanningCompleted()` method to Orchestrator:
+   - Exposes the `planning_completed` event from PlanService
+   - Callback receives `{ prd: PRD }` when planning completes
+
+2. Registered `planning_completed` listener in WebSocketManager.setupOrchestrator():
+   - Now broadcasts `planning_completed` event to all WebSocket clients
+   - Completes the WebSocket event forwarding for planning phase
+
+**Verification against spec (07-websocket.md):**
+
+1. Event types match spec exactly (lines 133-166):
+   - Connection: `connected`, `pong` ✓
+   - Planning: `planning_output`, `planning_question`, `planning_completed`, `planning_keepalive` ✓
+   - Battle: `battle_start`, `battle_pause`, `battle_resume`, `battle_cancel`, `battle_complete`, `battle_failed` ✓
+   - Iteration: `iteration_start`, `iteration_end`, `iteration_output` ✓
+   - Progress: `progress_update`, `completion_detected` ✓
+   - Feedback: `feedback_result` ✓
+   - Approval: `await_approval`, `approval_received` ✓
+   - Repository: `repo_changed` ✓
+   - System: `error` ✓
+
+2. Broadcasting behavior per spec (lines 583-596):
+   - `broadcast<T>(type, payload)` sends to all clients ✓
+   - Message format includes type, payload, timestamp ✓
+   - Dead clients removed on send error ✓
+
+3. Connection tracking per spec (lines 559-571):
+   - `handleOpen` generates unique connection ID ✓
+   - Clients stored in Set ✓
+   - `connected` message includes connectionId and clientsConnected ✓
+
+4. All events from spec implemented:
+   - 22 event types defined in spec, all present in implementation ✓
+   - All event listeners registered in setupOrchestrator() ✓
+
+**Acceptance Criteria Status:**
+- [x] Event types match spec exactly
+- [x] Broadcasting behavior per spec
+- [x] Connection tracking per spec
+- [x] All events from spec implemented
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 new errors in changed files)
+- Tests: 638 pass, 0 fail
+
+**Commit:** a034801
+
+## Task 014: Verify heartbeat/keepalive against spec - COMPLETED
+
+**Spec:** 07-websocket.md
+**Files Modified:**
+- packages/server/src/websocket/index.ts
+- packages/server/tests/websocket.test.ts
+
+**Verification Summary:**
+
+1. Ping/pong interval per spec (30s):
+   - Line 104: `heartbeatIntervalMs = 30000` (30 seconds) ✓
+   - Matches spec line 556: "heartbeatIntervalMs = 30000"
+   - Client sends ping, server responds with pong (handleMessage lines 243-248) ✓
+
+2. Stale connection detection per spec:
+   - Line 107: `connectionTimeoutMs = 600000` (10 minutes) ✓
+   - Matches spec line 557: "connectionTimeoutMs = 600000"
+   - Heartbeat checks every 30 seconds (lines 300-323) ✓
+   - Clients without ping for > timeout are closed (line 316) ✓
+
+3. Cleanup behavior per spec:
+   - Dead clients removed on send error (lines 289-293) ✓
+   - Stale connections closed with code 1000 "Connection timeout" (line 316) ✓
+   - close() method stops heartbeat and clears all clients (lines 353-366) ✓
+
+**Tests Added:**
+- `heartbeat interval is 30 seconds per spec` - verifies heartbeatIntervalMs = 30000
+- `connection timeout is 600 seconds (10 minutes) per spec` - verifies connectionTimeoutMs = 600000
+- `client lastPing is set on connection open` - verifies initial ping state
+- `client lastPing is updated on ping message` - verifies ping updates timestamp
+- `close is called with timeout reason for stale connections` - verifies stale cleanup behavior
+
+**Acceptance Criteria Status:**
+- [x] Ping/pong interval per spec (30s)
+- [x] Stale connection detection per spec
+- [x] Cleanup behavior per spec
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 new errors in changed files)
+- Tests: 643 pass, 0 fail
 

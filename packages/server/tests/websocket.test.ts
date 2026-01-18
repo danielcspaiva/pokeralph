@@ -130,6 +130,19 @@ describe("@pokeralph/server WebSocket", () => {
           manager.stopHeartbeat();
         }).not.toThrow();
       });
+
+      test("heartbeat interval is 30 seconds per spec", () => {
+        // Verify the heartbeat interval matches spec (07-websocket.md line 556)
+        // We access the private property via type assertion for testing
+        const managerAny = manager as unknown as { heartbeatIntervalMs: number };
+        expect(managerAny.heartbeatIntervalMs).toBe(30000);
+      });
+
+      test("connection timeout is 600 seconds (10 minutes) per spec", () => {
+        // Verify the connection timeout matches spec (07-websocket.md line 557)
+        const managerAny = manager as unknown as { connectionTimeoutMs: number };
+        expect(managerAny.connectionTimeoutMs).toBe(600000);
+      });
     });
 
     describe("close", () => {
@@ -371,6 +384,82 @@ describe("@pokeralph/server WebSocket", () => {
       expect(ids.length).toBe(2);
       expect(ids).toContain(ws1.data.id);
       expect(ids).toContain(ws2.data.id);
+    });
+
+    describe("stale connection cleanup per spec", () => {
+      test("client lastPing is set on connection open", () => {
+        const ws = createFakeWebSocket();
+        const beforeOpen = Date.now();
+
+        manager.handleOpen(asWs(ws));
+
+        expect(ws.data.lastPing).toBeGreaterThanOrEqual(beforeOpen);
+        expect(ws.data.lastPing).toBeLessThanOrEqual(Date.now());
+        expect(ws.data.isAlive).toBe(true);
+      });
+
+      test("client lastPing is updated on ping message", () => {
+        const ws = createFakeWebSocket();
+        manager.handleOpen(asWs(ws));
+
+        // Simulate time passing
+        ws.data.lastPing = Date.now() - 60000; // 1 minute ago
+
+        const pingMessage = JSON.stringify({
+          type: "ping",
+          payload: { timestamp: Date.now() },
+        });
+        manager.handleMessage(asWs(ws), pingMessage);
+
+        // lastPing should be updated to now
+        expect(Date.now() - ws.data.lastPing).toBeLessThan(1000);
+      });
+
+      test("close is called with timeout reason for stale connections", async () => {
+        // Create a manager with a very short timeout for testing
+        const testManager = new WebSocketManager();
+
+        // Access private properties for testing
+        const testManagerAny = testManager as unknown as {
+          connectionTimeoutMs: number;
+          heartbeatIntervalMs: number;
+        };
+        // Override timeout to 50ms for testing
+        testManagerAny.connectionTimeoutMs = 50;
+        // Override heartbeat interval to 25ms for faster test
+        testManagerAny.heartbeatIntervalMs = 25;
+
+        let closeCalled = false;
+        let closeCode = 0;
+        let closeReason = "";
+
+        const ws = {
+          data: { id: "stale-client", lastPing: Date.now() - 100, isAlive: true },
+          send: () => {},
+          close: (code: number, reason: string) => {
+            closeCalled = true;
+            closeCode = code;
+            closeReason = reason;
+          },
+        };
+
+        // Restart heartbeat to use new interval
+        testManager.stopHeartbeat();
+        testManager.startHeartbeat();
+
+        testManager.handleOpen(asWs(ws as unknown as FakeWebSocket));
+        // Make client stale
+        ws.data.lastPing = Date.now() - 100;
+
+        // Wait for heartbeat to detect stale connection
+        await new Promise((resolve) => setTimeout(resolve, 75));
+
+        expect(closeCalled).toBe(true);
+        expect(closeCode).toBe(1000);
+        expect(closeReason).toBe("Connection timeout");
+
+        testManager.close();
+      });
     });
   });
 

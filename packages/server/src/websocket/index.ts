@@ -296,8 +296,9 @@ export class WebSocketManager {
 
   /**
    * Starts the heartbeat interval to detect dead connections
+   * @internal Exposed for testing purposes
    */
-  private startHeartbeat(): void {
+  startHeartbeat(): void {
     if (this.heartbeatInterval) {
       clearInterval(this.heartbeatInterval);
     }
