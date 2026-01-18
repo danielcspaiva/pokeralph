@@ -744,3 +744,81 @@ export async function getBattleHistory(
     `/api/battle/${encodeURIComponent(taskId)}/history`
   );
 }
+
+// ==========================================================================
+// Onboarding Endpoints
+// ==========================================================================
+
+/**
+ * Project detection result
+ */
+export interface ProjectDetection {
+  type: "bun" | "node" | "python" | "go" | "rust" | "unknown";
+  packageManager: "bun" | "npm" | "pnpm" | "yarn" | null;
+  framework: string | null;
+  testRunner: string | null;
+  linter: string | null;
+  typescript: boolean;
+  existingPokeralph: boolean;
+}
+
+/**
+ * Detection response with suggested configuration
+ */
+export interface DetectionResponse {
+  detection: ProjectDetection;
+  suggestedConfig: Config;
+}
+
+/**
+ * Onboarding status response
+ */
+export interface OnboardingStatusResponse {
+  completed: boolean;
+  existingConfig: boolean;
+  existingPRD: boolean;
+}
+
+/**
+ * Complete onboarding request
+ */
+export interface CompleteOnboardingRequest {
+  config: Config;
+  skipFirstPRD: boolean;
+}
+
+/**
+ * Complete onboarding response
+ */
+export interface CompleteOnboardingResponse {
+  success: boolean;
+  configPath: string;
+}
+
+/**
+ * Detects project type and suggests configuration
+ */
+export async function detectProject(): Promise<DetectionResponse> {
+  return request<DetectionResponse>("/api/onboarding/detect", {
+    method: "POST",
+  });
+}
+
+/**
+ * Gets the onboarding status
+ */
+export async function getOnboardingStatus(): Promise<OnboardingStatusResponse> {
+  return request<OnboardingStatusResponse>("/api/onboarding/status");
+}
+
+/**
+ * Completes the onboarding process
+ */
+export async function completeOnboarding(
+  data: CompleteOnboardingRequest
+): Promise<CompleteOnboardingResponse> {
+  return request<CompleteOnboardingResponse>("/api/onboarding/complete", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
