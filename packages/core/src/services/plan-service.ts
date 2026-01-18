@@ -616,7 +616,7 @@ export class PlanService extends EventEmitter {
         this.emit("output", { output: data });
       });
 
-      this.deps.claudeBridge.onExit((_code, signal) => {
+      this.deps.claudeBridge.onExit(async (_code, signal) => {
         // Stop keepalive when Claude exits
         this.stopKeepalive();
         this.deps.claudeBridge.clearCallbacks();
@@ -638,12 +638,27 @@ export class PlanService extends EventEmitter {
           this.setState("waiting_input");
           this.emit("question", { question });
         } else {
-          // Check if we have a complete PRD in the output
-          const hasValidPRD = this.hasCompletePRD(currentOutput);
-
-          if (hasValidPRD) {
-            // Planning produced a PRD, stay in planning state
-            // User can call finishPlanning() to extract it
+          // No question detected - Claude has exited
+          // Try to auto-finish planning by extracting PRD from output
+          // This handles the case where Claude exits due to permission prompts in --print mode
+          if (this.outputBuffer.length > 0) {
+            log("Claude exited without question, attempting auto-finish");
+            try {
+              const prd = await this.finishPlanning();
+              log("Auto-finish successful", { prdName: prd.name });
+              // Note: finishPlanning() already emits planning_completed
+            } catch (err) {
+              // PRD extraction failed - emit error but don't block
+              // User can still see the conversation and retry
+              log("Auto-finish failed", { error: err instanceof Error ? err.message : err });
+              this.emit("error", {
+                message: `Could not extract PRD: ${err instanceof Error ? err.message : "unknown error"}`,
+                code: "PRD_EXTRACTION_FAILED",
+              });
+              // Transition to a completed-like state so the UI doesn't stay stuck
+              // The user can see the conversation output and try manual extraction
+              this.setState("completed");
+            }
           }
         }
 
@@ -911,41 +926,108 @@ ${JSON.stringify(PRD_OUTPUT_SCHEMA, null, 2)}
    */
   private extractPRDFromMarkdown(text: string): string | null {
     try {
-      // Look for project name in headers
-      const nameMatch = text.match(/^#\s+(?:Project:\s*)?(.+)$/m) ||
+      // Look for project name in headers - handle ** markers
+      const nameMatch = text.match(/\*\*Project:\s*(.+?)\*\*/i) ||
+                        text.match(/^#\s+(?:Project:\s*)?(.+)$/m) ||
                         text.match(/(?:Project|Name):\s*(.+)$/mi);
       if (!nameMatch) return null;
 
-      // Look for description
-      const descMatch = text.match(/(?:Description|Overview):\s*(.+?)(?:\n\n|\n#|\n-)/is) ||
-                        text.match(/^(?!#)(?!-\s)(.{20,}?)(?:\n\n|\n#|\n-)/m);
+      // Look for description - try multiple patterns
+      // First try to find text after "A simple..." or similar description patterns
+      let descMatch = text.match(/(?:^|\n)([A-Z][^.]*?(?:application|app|tool|system|project)[^.]*\.)/i);
+      if (!descMatch) {
+        descMatch = text.match(/(?:Description|Overview):\s*(.+?)(?:\n\n|\n#|\n-)/is) ||
+                    text.match(/^(?!#)(?!-\s)(?!\d+\.)(.{20,}?)(?:\n\n|\n#|\n-)/m);
+      }
       if (!descMatch) return null;
 
-      // Look for tasks (bullet points or numbered lists)
-      const taskMatches = [...text.matchAll(/^(?:[-*]|\d+\.)\s+(.+?)(?:\n|$)/gm)];
-      if (taskMatches.length === 0) return null;
+      // Look for tasks section headers
+      // Match "## Tasks", "**N Tasks:**", "N Tasks:", etc.
+      const tasksHeaderMatch = text.match(/##\s*Tasks\b|#\s*Tasks\b|\*\*(\d+)\s*Tasks?:?\*\*|\b(\d+)\s*Tasks?:/i);
 
-      // Build PRD object - safely access match groups
-      const projectName = nameMatch[1];
-      const projectDesc = descMatch[1];
-      if (!projectName || !projectDesc) return null;
+      // Extract task content - look for items AFTER the tasks header
+      let taskText = text;
+      if (tasksHeaderMatch) {
+        const headerIndex = text.indexOf(tasksHeaderMatch[0]);
+        if (headerIndex !== -1) {
+          // Only look at text after the tasks header
+          taskText = text.substring(headerIndex);
+        }
+      }
 
-      const prd = {
-        name: projectName.trim(),
-        description: projectDesc.trim(),
-        tasks: taskMatches.map((match, index) => {
-          const taskTitle = match[1] ?? "Untitled task";
-          return {
-            id: `${String(index + 1).padStart(3, "0")}-task`,
-            title: taskTitle.trim(),
-            description: taskTitle.trim(),
-            priority: index + 1,
-            acceptanceCriteria: [],
+      // Look for tasks (numbered lists with ** markers for titles)
+      // Pattern: 1. **Task Title** - Description
+      const taskMatches = [...taskText.matchAll(/^\s*\d+\.\s*\*\*([^*]+)\*\*\s*[-–—]?\s*(.+?)(?:\n|$)/gm)];
+
+      if (taskMatches.length > 0) {
+        // Build PRD object from ** marked tasks
+        const projectName = nameMatch[1];
+        const projectDesc = descMatch[1];
+        if (!projectName || !projectDesc) return null;
+
+        const prd = {
+          name: projectName.trim().replace(/\*\*/g, ""),
+          description: projectDesc.trim(),
+          tasks: taskMatches.map((match, index) => {
+            const taskTitle = match[1] ?? "Untitled task";
+            const taskDesc = match[2] ?? taskTitle;
+            return {
+              id: `${String(index + 1).padStart(3, "0")}-task`,
+              title: taskTitle.trim(),
+              description: taskDesc.trim(),
+              priority: index + 1,
+              acceptanceCriteria: [],
+            };
+          }),
+        };
+
+        return JSON.stringify(prd);
+      }
+
+      // Fallback to bullet points or simple numbered items AFTER tasks header
+      if (tasksHeaderMatch) {
+        // Look for bullet points (- or *) or numbered items
+        const bulletMatches = [...taskText.matchAll(/^\s*[-*]\s+(.+?)(?:\n|$)/gm)];
+        const simpleNumberedMatches = [...taskText.matchAll(/^\s*\d+\.\s+(.+?)(?:\n|$)/gm)];
+
+        // Prefer bullet points if we have tasks header, else use numbered
+        let items = bulletMatches.length > 0 ? bulletMatches : simpleNumberedMatches;
+
+        // Filter out questions (only for numbered items without tasks header)
+        if (bulletMatches.length === 0 && simpleNumberedMatches.length > 0) {
+          items = simpleNumberedMatches.filter(m => {
+            const content = m[1] || "";
+            const isQuestion = content.includes("?") ||
+                               /\b(prefer|want|like|would you|should)\b/i.test(content);
+            return !isQuestion;
+          });
+        }
+
+        if (items.length > 0) {
+          const projectName = nameMatch[1];
+          const projectDesc = descMatch[1];
+          if (!projectName || !projectDesc) return null;
+
+          const prd = {
+            name: projectName.trim().replace(/\*\*/g, ""),
+            description: projectDesc.trim(),
+            tasks: items.map((match, index) => {
+              const taskTitle = match[1] ?? "Untitled task";
+              return {
+                id: `${String(index + 1).padStart(3, "0")}-task`,
+                title: taskTitle.trim().replace(/\*\*/g, ""),
+                description: taskTitle.trim().replace(/\*\*/g, ""),
+                priority: index + 1,
+                acceptanceCriteria: [],
+              };
+            }),
           };
-        }),
-      };
 
-      return JSON.stringify(prd);
+          return JSON.stringify(prd);
+        }
+      }
+
+      return null;
     } catch {
       return null;
     }
