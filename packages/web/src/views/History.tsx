@@ -5,7 +5,7 @@
  * Shows iteration details, duration, result, files changed, and commit links.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   Loader2,
@@ -21,6 +21,8 @@ import {
   X,
   AlertCircle,
   Timer,
+  Copy,
+  CheckCircle,
 } from "lucide-react";
 import {
   useTask,
@@ -39,7 +41,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import type { FeedbackResults, FeedbackResult } from "@pokeralph/core/types";
 
 // ==========================================================================
 // Helper Functions
@@ -126,6 +130,57 @@ function getResultLabel(result: IterationResult): string {
 // ==========================================================================
 // Sub-components
 // ==========================================================================
+
+/**
+ * Display feedback loop results (test/lint/typecheck)
+ */
+interface FeedbackResultsDisplayProps {
+  feedbackResults: FeedbackResults;
+}
+
+function FeedbackResultsDisplay({ feedbackResults }: FeedbackResultsDisplayProps) {
+  const entries = Object.entries(feedbackResults);
+
+  if (entries.length === 0) {
+    return null;
+  }
+
+  return (
+    <div>
+      <span className="text-sm font-medium">Feedback Results</span>
+      <div className="mt-2 space-y-2">
+        {entries.map(([name, result]: [string, FeedbackResult]) => (
+          <div
+            key={name}
+            className={cn(
+              "flex items-center justify-between rounded-md p-2",
+              result.passed
+                ? "bg-[hsl(var(--success)/0.1)]"
+                : "bg-[hsl(var(--destructive)/0.1)]"
+            )}
+          >
+            <div className="flex items-center gap-2">
+              {result.passed ? (
+                <CheckCircle className="h-4 w-4 text-[hsl(var(--success))]" />
+              ) : (
+                <X className="h-4 w-4 text-[hsl(var(--destructive))]" />
+              )}
+              <span className="font-medium">{name}</span>
+              <Badge variant={result.passed ? "success" : "destructive"}>
+                {result.passed ? "Passed" : "Failed"}
+              </Badge>
+            </div>
+            {result.duration !== undefined && (
+              <span className="text-sm text-[hsl(var(--muted-foreground))]">
+                {formatDuration(result.duration)}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Task info header
@@ -220,8 +275,38 @@ function IterationItem({
   isFirst: _isFirst,
   isLast,
 }: IterationItemProps) {
+  const [outputSearch, setOutputSearch] = useState("");
+  const [copied, setCopied] = useState(false);
+
   const duration = calculateIterationDuration(iteration);
   const resultVariant = getResultVariant(iteration.result);
+
+  // Filter output based on search query
+  const filteredOutput = useMemo(() => {
+    if (!iteration.output || !outputSearch.trim()) {
+      return iteration.output;
+    }
+    const lines = iteration.output.split("\n");
+    const searchLower = outputSearch.toLowerCase();
+    const matchingLines = lines.filter((line) =>
+      line.toLowerCase().includes(searchLower)
+    );
+    return matchingLines.length > 0
+      ? matchingLines.join("\n")
+      : `No matches for "${outputSearch}"`;
+  }, [iteration.output, outputSearch]);
+
+  // Copy output to clipboard
+  const handleCopyOutput = useCallback(async () => {
+    if (!iteration.output) return;
+    try {
+      await navigator.clipboard.writeText(iteration.output);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy output:", err);
+    }
+  }, [iteration.output]);
 
   return (
     <div className="relative flex gap-4">
@@ -296,12 +381,39 @@ function IterationItem({
               </div>
             )}
 
-            {/* Output section */}
+            {/* Output section with search and copy */}
             {iteration.output && (
               <div>
-                <span className="text-sm font-medium">Output</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Output</span>
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
+                      <Input
+                        type="text"
+                        placeholder="Search output..."
+                        value={outputSearch}
+                        onChange={(e) => setOutputSearch(e.target.value)}
+                        className="h-7 w-40 pl-7 text-xs"
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCopyOutput}
+                      className="h-7 px-2"
+                      title="Copy to clipboard"
+                    >
+                      {copied ? (
+                        <CheckCircle className="h-3 w-3 text-[hsl(var(--success))]" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
                 <ScrollArea className="mt-1 h-40 rounded-md bg-[hsl(var(--muted))] p-3 font-mono text-sm">
-                  {iteration.output}
+                  {filteredOutput}
                 </ScrollArea>
               </div>
             )}
@@ -324,6 +436,11 @@ function IterationItem({
                   ))}
                 </ul>
               </div>
+            )}
+
+            {/* Feedback results (test/lint/typecheck) */}
+            {iteration.feedbackResults && Object.keys(iteration.feedbackResults).length > 0 && (
+              <FeedbackResultsDisplay feedbackResults={iteration.feedbackResults} />
             )}
 
             {/* Commit link */}
