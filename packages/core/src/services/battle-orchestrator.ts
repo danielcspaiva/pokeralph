@@ -601,27 +601,61 @@ export class BattleOrchestrator extends EventEmitter {
     const feedbackResults = await this.runFeedbackLoops(taskId);
     const allPassed = feedbackResults.every((r) => r.passed);
 
-    // Get changed files from git
-    const gitStatus = await this.deps.gitService.status();
-    const filesChanged = [
-      ...gitStatus.staged.map((f) => f.path),
-      ...gitStatus.unstaged.map((f) => f.path),
-      ...gitStatus.untracked.map((f) => f.path),
-    ];
+    // Get changed files from git (if it's a git repo)
+    let filesChanged: string[] = [];
+    let commitHash: string | undefined;
 
     // Auto-commit if enabled and feedback passed
-    let commitHash: string | undefined;
-    if (config.autoCommit && allPassed && gitStatus.isDirty) {
+    if (config.autoCommit && allPassed) {
       try {
-        // Filter out .pokeralph files from commit (they contain app state, not project code)
-        const filesToCommit = filesChanged.filter((f) => !f.startsWith(".pokeralph/"));
-        if (filesToCommit.length > 0) {
-          await this.deps.gitService.add(filesToCommit);
-          const commitMessage = GitService.formatCommitMessage(taskId, task.title);
-          commitHash = await this.deps.gitService.commit(commitMessage);
+        // Check if working directory is a git repository first
+        const isGitRepo = await this.deps.gitService.isRepo();
+        if (!isGitRepo) {
+          // Not a git repo - skip commit silently per spec
+          // User should either init a repo or disable autoCommit
+          this.emit("error", {
+            message: "Not a git repository - auto-commit skipped",
+            code: "NOT_GIT_REPO",
+          });
+        } else {
+          // Get changed files from git
+          const gitStatus = await this.deps.gitService.status();
+          filesChanged = [
+            ...gitStatus.staged.map((f) => f.path),
+            ...gitStatus.unstaged.map((f) => f.path),
+            ...gitStatus.untracked.map((f) => f.path),
+          ];
+
+          if (gitStatus.isDirty) {
+            // Filter out .pokeralph files from commit (they contain app state, not project code)
+            const filesToCommit = filesChanged.filter((f) => !f.startsWith(".pokeralph/"));
+            if (filesToCommit.length > 0) {
+              await this.deps.gitService.add(filesToCommit);
+              const commitMessage = GitService.formatCommitMessage(taskId, task.title);
+              commitHash = await this.deps.gitService.commit(commitMessage);
+            }
+            // No changes to commit - silent skip per spec
+          }
         }
+      } catch (error) {
+        // Commit failed - not fatal, continue without commit per spec
+        this.emit("error", {
+          message: "Auto-commit failed",
+          code: "COMMIT_FAILED",
+          details: error instanceof Error ? error.message : String(error),
+        });
+      }
+    } else {
+      // Get changed files from git for reporting even if autoCommit is disabled
+      try {
+        const gitStatus = await this.deps.gitService.status();
+        filesChanged = [
+          ...gitStatus.staged.map((f) => f.path),
+          ...gitStatus.unstaged.map((f) => f.path),
+          ...gitStatus.untracked.map((f) => f.path),
+        ];
       } catch {
-        // Commit failed - not fatal
+        // Git status failed - not fatal
       }
     }
 
