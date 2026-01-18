@@ -106,6 +106,21 @@ export {
   type TaskRiskFactor,
 } from "./preflight-service.ts";
 
+// DryRunService - provides dry run analysis before battles
+export {
+  DryRunService,
+  redactSensitiveData,
+  predictAffectedFiles,
+  assessFileConfidence,
+  estimateIterations,
+  assessIterationConfidence,
+  assessDurationConfidence,
+  countTokens,
+  type ConfidenceLevel,
+  type DryRunResult,
+  type DryRunContext,
+} from "./dry-run-service.ts";
+
 // Custom error classes
 export { FileNotFoundError, ValidationError } from "./errors.ts";
 

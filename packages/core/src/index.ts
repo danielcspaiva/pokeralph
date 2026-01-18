@@ -106,6 +106,18 @@ export {
   type PreflightReportDTO,
   type TaskRisk,
   type TaskRiskFactor,
+  // DryRunService
+  DryRunService,
+  redactSensitiveData,
+  predictAffectedFiles,
+  assessFileConfidence,
+  estimateIterations,
+  assessIterationConfidence,
+  assessDurationConfidence,
+  countTokens,
+  type ConfidenceLevel,
+  type DryRunResult,
+  type DryRunContext,
 } from "./services/index.ts";
 
 // Re-export all types

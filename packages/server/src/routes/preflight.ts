@@ -14,7 +14,9 @@ import {
   toPreflightReportDTO,
   toPreflightCheckResultDTO,
   validatePreflightToken,
+  DryRunService,
   type PreflightContext,
+  type DryRunContext,
 } from "@pokeralph/core";
 
 /**
@@ -228,10 +230,12 @@ export function createPreflightRoutes(): Hono {
    * Run dry run analysis for a task.
    * Shows what would happen without making changes.
    *
+   * Based on: SPECS/10-preflight.md (Dry Run Feature section)
+   *
    * @param {string} body.taskId - The task ID
    * @returns {{ result: DryRunResult }}
    * @throws {400} If validation fails
-   * @throws {404} If task doesn't exist
+   * @throws {404} If task or PRD doesn't exist
    * @throws {503} If orchestrator is not initialized
    */
   router.post("/dry-run", async (c) => {
@@ -261,58 +265,38 @@ export function createPreflightRoutes(): Hono {
       );
     }
 
+    // Get PRD (needed for prompt building)
+    const prd = await orchestrator.getPRD();
+    if (!prd) {
+      throw new AppError(
+        "No PRD found - create a PRD first",
+        400,
+        "NO_PRD"
+      );
+    }
+
     // Get config
     const config = await orchestrator.getConfig();
 
-    // Dry run is a Phase 9 enhancement (Task 025)
-    // For now, return a basic dry run result
-    const timestamp = new Date().toISOString();
+    // Build progress file path
+    const workingDir = orchestrator.getWorkingDir();
+    const progressFilePath = `.pokeralph/battles/${taskId}/progress.json`;
 
-    // Predict affected files from task description
-    const filesLikelyAffected = predictAffectedFiles(task.description);
-
-    // Estimate iterations based on task complexity
-    const estimatedIterations = estimateIterations(task);
-
-    const dryRunResult = {
+    // Create dry run context
+    const dryRunContext: DryRunContext = {
       taskId,
-      timestamp,
-      prompt: {
-        full: "[Prompt preview not available - use battle start for full prompt generation]",
-        redacted: "[Prompt preview not available - use battle start for full prompt generation]",
-        redactedFields: [],
-      },
-      promptTokens: 0, // Would require full prompt building
-      filesLikelyAffected: {
-        files: filesLikelyAffected,
-        confidence: filesLikelyAffected.length > 0 ? "medium" as const : "low" as const,
-        reason: filesLikelyAffected.length > 0
-          ? "Files inferred from task keywords"
-          : "No specific files identified, will depend on Claude's analysis",
-      },
-      estimatedIterations: {
-        min: estimatedIterations.min,
-        max: estimatedIterations.max,
-        confidence: estimatedIterations.confidence,
-        reason: estimatedIterations.reason,
-      },
-      estimatedDuration: {
-        min: estimatedIterations.min * 3, // ~3 min per iteration
-        max: estimatedIterations.max * 5, // ~5 min per iteration
-        confidence: estimatedIterations.confidence,
-        reason: "Based on iteration estimate and typical iteration duration",
-      },
-      existingFiles: [],
-      contextSize: 0,
-      config: {
-        mode: config.mode,
-        maxIterationsPerTask: config.maxIterationsPerTask,
-        feedbackLoops: config.feedbackLoops,
-        autoCommit: config.autoCommit,
-      },
+      task,
+      config,
+      prd,
+      workingDir,
+      progressFilePath,
     };
 
-    return c.json({ result: dryRunResult });
+    // Run dry run analysis using DryRunService
+    const dryRunService = new DryRunService(workingDir);
+    const result = await dryRunService.runDryRun(dryRunContext);
+
+    return c.json({ result });
   });
 
   /**
@@ -378,67 +362,4 @@ export function createPreflightRoutes(): Hono {
   });
 
   return router;
-}
-
-/**
- * Predict affected files from task description
- */
-function predictAffectedFiles(description: string): string[] {
-  const files: string[] = [];
-  const patterns = [
-    /(?:create|add|modify|update|edit)\s+(?:the\s+)?(\S+\.\w+)/gi,
-    /(?:in|at)\s+(\S+\.\w+)/gi,
-    /(\S+\.(ts|tsx|js|jsx|py|go|rs))/gi,
-  ];
-
-  for (const pattern of patterns) {
-    let match: RegExpExecArray | null = pattern.exec(description);
-    while (match !== null) {
-      if (match[1] && !files.includes(match[1])) {
-        files.push(match[1]);
-      }
-      match = pattern.exec(description);
-    }
-  }
-
-  return files;
-}
-
-/**
- * Estimate iterations based on task complexity
- */
-function estimateIterations(task: { acceptanceCriteria: string[]; description: string }): {
-  min: number;
-  max: number;
-  confidence: "high" | "medium" | "low";
-  reason: string;
-} {
-  const criteriaCount = task.acceptanceCriteria.length;
-  const descLength = task.description.length;
-
-  // Simple heuristics
-  if (criteriaCount <= 2 && descLength < 200) {
-    return {
-      min: 1,
-      max: 3,
-      confidence: "high",
-      reason: "Well-scoped task with few acceptance criteria",
-    };
-  }
-
-  if (criteriaCount <= 5 && descLength < 500) {
-    return {
-      min: 2,
-      max: 5,
-      confidence: "medium",
-      reason: "Moderately complex task",
-    };
-  }
-
-  return {
-    min: 3,
-    max: 8,
-    confidence: "low",
-    reason: "Complex task with multiple criteria or long description",
-  };
 }
