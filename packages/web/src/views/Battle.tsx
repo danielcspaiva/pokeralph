@@ -19,11 +19,14 @@ import {
   PartyPopper,
   AlertCircle,
   Search,
+  GitCommit,
+  FileText,
 } from "lucide-react";
 import {
   useTask,
   useCurrentBattle,
   useBattleProgress,
+  useBattleHistory,
   useConfig,
   useAppStore,
 } from "@/stores/app-store";
@@ -45,8 +48,7 @@ import {
 } from "@pokeralph/core/types";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PokeballIndicator, HPBar } from "@/components/ui/progress";
+import { PokeballIndicator } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 // ==========================================================================
@@ -109,34 +111,71 @@ function Timer({ startTime, isRunning }: TimerProps) {
 }
 
 /**
- * Feedback loop status indicator
+ * Feedback loop status indicator per spec (03-battles.md lines 743-747)
+ * States: pending, running, passed, failed with duration display
  */
 interface FeedbackStatusProps {
+  /** Configured feedback loops from config */
+  configuredLoops: string[];
+  /** Results from completed feedback runs */
   results: Record<string, FeedbackResult> | null;
+  /** Currently running feedback loop name (if any) */
+  runningLoop: string | null;
 }
 
-function FeedbackStatus({ results }: FeedbackStatusProps) {
-  if (!results || Object.keys(results).length === 0) {
+function FeedbackStatus({ configuredLoops, results, runningLoop }: FeedbackStatusProps) {
+  if (configuredLoops.length === 0) {
     return null;
   }
 
+  /** Format duration in seconds */
+  const formatDuration = (ms: number | undefined) => {
+    if (ms === undefined) return "";
+    return `(${(ms / 1000).toFixed(1)}s)`;
+  };
+
   return (
     <div className="flex flex-wrap gap-2">
-      {Object.entries(results).map(([name, result]) => (
-        <Badge
-          key={name}
-          variant={result.passed ? "success" : "destructive"}
-          className="gap-1"
-          title={result.output || (result.passed ? "Passed" : "Failed")}
-        >
-          {result.passed ? (
-            <Check className="h-3 w-3" />
-          ) : (
-            <X className="h-3 w-3" />
-          )}
-          {name}
-        </Badge>
-      ))}
+      {configuredLoops.map((loopName) => {
+        const result = results?.[loopName];
+        const isRunning = runningLoop === loopName;
+
+        // Determine state: running > completed (passed/failed) > pending
+        if (isRunning) {
+          return (
+            <Badge key={loopName} variant="outline" className="gap-1 animate-pulse">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {loopName}
+            </Badge>
+          );
+        }
+
+        if (result) {
+          return (
+            <Badge
+              key={loopName}
+              variant={result.passed ? "success" : "destructive"}
+              className="gap-1"
+              title={result.output || (result.passed ? "Passed" : "Failed")}
+            >
+              {result.passed ? (
+                <Check className="h-3 w-3" />
+              ) : (
+                <X className="h-3 w-3" />
+              )}
+              {loopName} {formatDuration(result.duration)}
+            </Badge>
+          );
+        }
+
+        // Pending state
+        return (
+          <Badge key={loopName} variant="secondary" className="gap-1 opacity-50">
+            <Clock className="h-3 w-3" />
+            {loopName}
+          </Badge>
+        );
+      })}
     </div>
   );
 }
@@ -331,10 +370,16 @@ export function Battle() {
   const storeTask = useTask(taskId ?? "");
   const currentBattle = useCurrentBattle();
   const battleProgress = useBattleProgress(taskId ?? "");
+  const battleHistory = useBattleHistory(taskId ?? "");
   const config = useConfig();
   const setCurrentBattle = useAppStore((state) => state.setCurrentBattle);
   const setBattleProgress = useAppStore((state) => state.setBattleProgress);
   const updateTask = useAppStore((state) => state.updateTask);
+
+  // Track currently running feedback loop for UI state
+  // Note: setRunningFeedbackLoop would be called from WebSocket feedback_result events
+  // Currently not implemented - feedback loops show based on presence in results
+  const [runningFeedbackLoop] = useState<string | null>(null);
 
   // Local state
   const [task, setTask] = useState<Task | null>(storeTask);
@@ -544,15 +589,16 @@ export function Battle() {
       {/* Task info section */}
       <TaskInfo task={task} />
 
-      {/* Status section - Battle HUD style */}
+      {/* Status section - Battle HUD style per spec (03-battles.md lines 729-752) */}
       <div className="battle-card p-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          {/* Left side - Status and feedback */}
+          {/* Left side - Status, mode, and feedback */}
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-3">
+              {/* Battle status badge */}
               <span className={`px-2 py-1 text-xs font-bold border-2 border-[hsl(var(--battle-fg))] ${
-                stage === "completed" ? "bg-[hsl(120_50%_30%)]" : 
-                stage === "failed" ? "bg-[hsl(0_50%_35%)]" : 
+                stage === "completed" ? "bg-[hsl(120_50%_30%)]" :
+                stage === "failed" ? "bg-[hsl(0_50%_35%)]" :
                 "bg-[hsl(var(--battle-card))]"
               } text-[hsl(var(--battle-fg))]`}>
                 {stage === "idle" && "READY"}
@@ -562,12 +608,27 @@ export function Battle() {
                 {stage === "completed" && "VICTORY"}
                 {stage === "failed" && "FAINTED"}
               </span>
+              {/* Execution mode badge per spec (03-battles.md line 730) */}
+              {currentBattle && (
+                <span className={`px-2 py-1 text-xs font-bold border-2 border-[hsl(var(--battle-fg))] ${
+                  currentBattle.mode === "yolo"
+                    ? "bg-[hsl(45_80%_40%)] text-[hsl(0_0%_10%)]"
+                    : "bg-[hsl(200_60%_35%)]"
+                } text-[hsl(var(--battle-fg))]`}>
+                  {currentBattle.mode.toUpperCase()}
+                </span>
+              )}
               <Timer
                 startTime={iterationStartTime}
                 isRunning={stage === "running"}
               />
             </div>
-            <FeedbackStatus results={progress?.feedbackResults ?? null} />
+            {/* Feedback loops per spec (03-battles.md lines 743-747) */}
+            <FeedbackStatus
+              configuredLoops={config?.feedbackLoops ?? []}
+              results={progress?.feedbackResults ?? null}
+              runningLoop={runningFeedbackLoop}
+            />
           </div>
 
           {/* Right side - Iteration indicators (pokeball style) */}
@@ -589,14 +650,29 @@ export function Battle() {
           </div>
         </div>
 
-        {/* HP-style progress bar */}
+        {/* HP-style progress bar with last commit info per spec (03-battles.md lines 749-752) */}
         <div className="mt-4">
-          <div className="flex items-center gap-2 text-xs font-bold text-[hsl(var(--battle-fg))] mb-1">
-            <span>PROGRESS</span>
-            <span>{Math.round(progressPercentage)}%</span>
+          <div className="flex items-center justify-between text-xs font-bold text-[hsl(var(--battle-fg))] mb-1">
+            <div className="flex items-center gap-2">
+              <span>PROGRESS</span>
+              <span>{Math.round(progressPercentage)}%</span>
+            </div>
+            {/* Last commit info per spec */}
+            {(() => {
+              const lastIteration = battleHistory?.iterations?.slice(-1)[0];
+              if (lastIteration?.commitHash) {
+                return (
+                  <div className="flex items-center gap-1 opacity-70 font-normal">
+                    <GitCommit className="h-3 w-3" />
+                    <span className="font-mono">{lastIteration.commitHash.slice(0, 7)}</span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
           <div className="battle-hp-bar">
-            <div 
+            <div
               className={`battle-hp-bar-fill ${progressPercentage < 25 ? 'danger' : progressPercentage < 50 ? 'warning' : ''}`}
               style={{ width: `${progressPercentage}%` }}
             />
@@ -626,14 +702,42 @@ export function Battle() {
         />
       )}
 
-      {/* HITL approval message */}
+      {/* HITL approval dialog per spec (03-battles.md lines 754-768) */}
       {stage === "awaiting_approval" && (
-        <div className="battle-dialog py-4 text-center">
-          <Pause className="mx-auto mb-3 h-8 w-8 text-[hsl(var(--battle-fg))]" />
-          <h4 className="font-bold text-[hsl(var(--battle-fg))]">What will TRAINER do?</h4>
-          <p className="mt-2 text-[hsl(var(--battle-fg))] opacity-70">
-            Round {currentIteration} complete. Review changes and choose your next move.
-          </p>
+        <div className="battle-dialog py-4">
+          <div className="text-center mb-4">
+            <Pause className="mx-auto mb-3 h-8 w-8 text-[hsl(var(--battle-fg))]" />
+            <h4 className="font-bold text-[hsl(var(--battle-fg))]">What will TRAINER do?</h4>
+            <p className="mt-2 text-[hsl(var(--battle-fg))] opacity-70">
+              Round {currentIteration} complete. Review changes and choose your next move.
+            </p>
+          </div>
+
+          {/* Files changed display per spec (03-battles.md lines 763-766) */}
+          {(() => {
+            const currentIterationData = battleHistory?.iterations?.find(
+              (it) => it.number === currentIteration
+            );
+            const filesChanged = currentIterationData?.filesChanged ?? [];
+            if (filesChanged.length > 0) {
+              return (
+                <div className="mt-4 bg-[hsl(var(--battle-bg))] border-2 border-[hsl(var(--battle-fg))] p-3">
+                  <div className="flex items-center gap-2 text-sm font-bold text-[hsl(var(--battle-fg))] mb-2">
+                    <FileText className="h-4 w-4" />
+                    <span>Files changed: {filesChanged.length}</span>
+                  </div>
+                  <ul className="text-sm text-[hsl(var(--battle-fg))] opacity-80 max-h-32 overflow-y-auto">
+                    {filesChanged.map((file) => (
+                      <li key={file} className="font-mono text-xs truncate">
+                        {file}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       )}
 
@@ -663,13 +767,17 @@ export function Battle() {
           </>
         ) : stage === "awaiting_approval" ? (
           <>
+            {/* Reject button per spec (03-battles.md line 768) */}
             <Button
               variant="battle"
               onClick={handleCancel}
               disabled={isActionLoading}
+              className="border-[hsl(0_60%_40%)]"
             >
-              Cancel
+              <X className="mr-2 h-4 w-4" />
+              Reject
             </Button>
+            {/* Approve button per spec (03-battles.md line 768) */}
             <Button
               variant="battle"
               onClick={handleApprove}
