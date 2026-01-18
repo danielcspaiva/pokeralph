@@ -308,8 +308,8 @@ export class BattleOrchestrator extends EventEmitter {
     // Save final state
     await this.deps.fileManager.saveBattleHistory(taskId, battle);
 
-    // Update task status
-    await this.updateTaskStatus(taskId, TaskStatus.Paused);
+    // Update task status to failed (cancelled battles are failures)
+    await this.updateTaskStatus(taskId, TaskStatus.Failed);
 
     // Update progress
     const progress = await this.loadOrCreateProgress(taskId);
