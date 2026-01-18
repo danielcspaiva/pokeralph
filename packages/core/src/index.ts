@@ -61,6 +61,7 @@ export {
   type PlanningState,
   type PRDParseResult,
   type TasksParseResult,
+  type PRDExtractionErrorCode,
   // Zod schemas
   ConfigSchema,
   TaskSchema,

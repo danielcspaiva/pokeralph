@@ -66,6 +66,7 @@ export {
   type PlanningState,
   type PRDParseResult,
   type TasksParseResult,
+  type PRDExtractionErrorCode,
 } from "./plan-service.ts";
 
 

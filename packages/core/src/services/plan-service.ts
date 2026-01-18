@@ -56,13 +56,30 @@ export interface PlanServiceEvents {
 }
 
 /**
+ * Error codes for PRD extraction failures
+ * Used to determine recovery options in UI
+ */
+export type PRDExtractionErrorCode =
+  | "NO_JSON_FOUND"
+  | "INVALID_JSON"
+  | "MISSING_NAME"
+  | "MISSING_DESCRIPTION"
+  | "MISSING_TASKS"
+  | "EMPTY_TASKS"
+  | "INVALID_TASK";
+
+/**
  * Result of parsing Claude's PRD output
  */
 export interface PRDParseResult {
   success: boolean;
   prd?: PRD;
   error?: string;
+  /** Error code for structured recovery in UI */
+  errorCode?: PRDExtractionErrorCode;
   rawOutput: string;
+  /** Strategies that were attempted before failure */
+  attemptedStrategies?: string[];
 }
 
 /**
@@ -294,9 +311,14 @@ export class PlanService extends EventEmitter {
 
   /**
    * Parses Claude's output to extract a PRD
+   * Uses multiple extraction strategies per spec (02-planning.md):
+   * 1. extractFromCodeBlock - Look for ```json blocks
+   * 2. extractFromMarkers - Look for PRD: or similar markers
+   * 3. extractLooseJSON - Try to find any JSON object
+   * 4. extractFromMarkdown - Parse markdown structure
    *
    * @param raw - The raw output from Claude
-   * @returns ParseResult with the PRD or error
+   * @returns ParseResult with the PRD or error with recovery info
    */
   parsePRDOutput(raw: string): PRDParseResult {
     const result: PRDParseResult = {
@@ -305,30 +327,58 @@ export class PlanService extends EventEmitter {
     };
 
     try {
-      // Extract JSON from the output (may be wrapped in markdown code blocks)
-      const jsonStr = this.extractJSON(raw);
+      // Extract JSON using multiple strategies per spec
+      const { json: jsonStr, strategies } = this.extractJSONWithStrategies(raw);
+      result.attemptedStrategies = strategies;
 
       if (!jsonStr) {
-        result.error = "No JSON found in output";
+        result.error = `No JSON found in output. Tried: ${strategies.join(", ")}`;
+        result.errorCode = "NO_JSON_FOUND";
         return result;
       }
 
-      const parsed = JSON.parse(jsonStr);
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(jsonStr);
+      } catch (parseError) {
+        result.error = `Invalid JSON: ${parseError instanceof Error ? parseError.message : "parse error"}`;
+        result.errorCode = "INVALID_JSON";
+        return result;
+      }
+
+      // Type guard for parsed object
+      if (typeof parsed !== "object" || parsed === null) {
+        result.error = "Parsed JSON is not an object";
+        result.errorCode = "INVALID_JSON";
+        return result;
+      }
+
+      const parsedObj = parsed as Record<string, unknown>;
 
       // Validate required fields
-      if (!parsed.name || typeof parsed.name !== "string") {
+      if (!parsedObj.name || typeof parsedObj.name !== "string") {
         result.error = "PRD missing required field: name";
+        result.errorCode = "MISSING_NAME";
         return result;
       }
 
-      if (!parsed.description || typeof parsed.description !== "string") {
+      if (!parsedObj.description || typeof parsedObj.description !== "string") {
         result.error = "PRD missing required field: description";
+        result.errorCode = "MISSING_DESCRIPTION";
         return result;
       }
 
-      // Validate tasks array exists and has at least one item
-      if (!Array.isArray(parsed.tasks) || parsed.tasks.length === 0) {
+      // Validate tasks array exists
+      if (!Array.isArray(parsedObj.tasks)) {
+        result.error = "PRD must contain a tasks array";
+        result.errorCode = "MISSING_TASKS";
+        return result;
+      }
+
+      // Validate tasks array has at least one item
+      if (parsedObj.tasks.length === 0) {
         result.error = "PRD must contain at least one task";
+        result.errorCode = "EMPTY_TASKS";
         return result;
       }
 
@@ -336,21 +386,24 @@ export class PlanService extends EventEmitter {
       const now = new Date().toISOString();
       const tasks: Task[] = [];
 
-      for (let i = 0; i < parsed.tasks.length; i++) {
-        const t = parsed.tasks[i];
+      for (let i = 0; i < parsedObj.tasks.length; i++) {
+        const t = parsedObj.tasks[i] as Record<string, unknown>;
 
         if (!t.id || typeof t.id !== "string") {
           result.error = `Task ${i + 1} missing required field: id`;
+          result.errorCode = "INVALID_TASK";
           return result;
         }
 
         if (!t.title || typeof t.title !== "string") {
           result.error = `Task ${i + 1} missing required field: title`;
+          result.errorCode = "INVALID_TASK";
           return result;
         }
 
         if (!t.description || typeof t.description !== "string") {
           result.error = `Task ${i + 1} missing required field: description`;
+          result.errorCode = "INVALID_TASK";
           return result;
         }
 
@@ -370,14 +423,14 @@ export class PlanService extends EventEmitter {
 
       // Build PRD object with validated tasks
       const prd: PRD = {
-        name: parsed.name,
-        description: parsed.description,
-        createdAt: parsed.createdAt || now,
+        name: parsedObj.name,
+        description: parsedObj.description,
+        createdAt: typeof parsedObj.createdAt === "string" ? parsedObj.createdAt : now,
         tasks,
         metadata: {
-          version: parsed.metadata?.version || "0.1.0",
-          generatedBy: parsed.metadata?.generatedBy || "PokéRalph PlanService",
-          originalIdea: this.currentIdea || parsed.metadata?.originalIdea,
+          version: (parsedObj.metadata as Record<string, unknown>)?.version as string || "0.1.0",
+          generatedBy: (parsedObj.metadata as Record<string, unknown>)?.generatedBy as string || "PokéRalph PlanService",
+          originalIdea: this.currentIdea || (parsedObj.metadata as Record<string, unknown>)?.originalIdea as string,
         },
       };
 
@@ -386,6 +439,7 @@ export class PlanService extends EventEmitter {
     } catch (error) {
       result.error =
         error instanceof Error ? error.message : "Unknown parse error";
+      result.errorCode = "INVALID_JSON";
     }
 
     return result;
@@ -765,29 +819,59 @@ ${JSON.stringify(PRD_OUTPUT_SCHEMA, null, 2)}
   }
 
   /**
-   * Extracts JSON from output that may be wrapped in markdown code blocks
+   * Extracts JSON from output using multiple strategies per spec (02-planning.md)
+   * Strategies are tried in order:
+   * 1. extractFromCodeBlock - Look for ```json blocks
+   * 2. extractFromMarkers - Look for PRD: or similar markers
+   * 3. extractLooseJSON - Try to find any JSON object/array
+   * 4. extractFromMarkdown - Parse markdown structure
+   *
+   * @returns Tuple of [json string, strategies attempted]
    */
-  private extractJSON(text: string): string | null {
-    // Try to find JSON in markdown code blocks first
+  private extractJSONWithStrategies(text: string): { json: string | null; strategies: string[] } {
+    const strategies: string[] = [];
+
+    // Strategy 1: extractFromCodeBlock - Look for ```json blocks
+    strategies.push("extractFromCodeBlock");
     const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
     if (codeBlockMatch?.[1]) {
       const content = codeBlockMatch[1].trim();
-      // Verify it's valid JSON
       try {
         JSON.parse(content);
-        return content;
+        return { json: content, strategies };
       } catch {
-        // Not valid JSON, continue to other methods
+        // Not valid JSON, continue to other strategies
       }
     }
 
+    // Strategy 2: extractFromMarkers - Look for PRD: or similar markers
+    strategies.push("extractFromMarkers");
+    const markerPatterns = [
+      /PRD:\s*(\{[\s\S]*\})/i,
+      /Project Document:\s*(\{[\s\S]*\})/i,
+      /Here(?:'s| is) (?:the |your )?PRD:?\s*(\{[\s\S]*\})/i,
+      /Generated PRD:?\s*(\{[\s\S]*\})/i,
+    ];
+    for (const pattern of markerPatterns) {
+      const match = text.match(pattern);
+      if (match?.[1]) {
+        try {
+          JSON.parse(match[1]);
+          return { json: match[1], strategies };
+        } catch {
+          // Not valid JSON, try next pattern
+        }
+      }
+    }
+
+    // Strategy 3: extractLooseJSON - Try to find any JSON object/array
+    strategies.push("extractLooseJSON");
     // Try to find a JSON object directly first (PRDs are objects)
-    // This ensures we get the full PRD even if it contains arrays
     const objectMatch = text.match(/\{[\s\S]*\}/);
     if (objectMatch) {
       try {
         JSON.parse(objectMatch[0]);
-        return objectMatch[0];
+        return { json: objectMatch[0], strategies };
       } catch {
         // Not valid JSON
       }
@@ -798,13 +882,73 @@ ${JSON.stringify(PRD_OUTPUT_SCHEMA, null, 2)}
     if (arrayMatch) {
       try {
         JSON.parse(arrayMatch[0]);
-        return arrayMatch[0];
+        return { json: arrayMatch[0], strategies };
       } catch {
         // Not valid JSON
       }
     }
 
-    return null;
+    // Strategy 4: extractFromMarkdown - Parse markdown structure
+    strategies.push("extractFromMarkdown");
+    const markdownPRD = this.extractPRDFromMarkdown(text);
+    if (markdownPRD) {
+      return { json: markdownPRD, strategies };
+    }
+
+    return { json: null, strategies };
+  }
+
+  /**
+   * Legacy method for backward compatibility
+   */
+  private extractJSON(text: string): string | null {
+    return this.extractJSONWithStrategies(text).json;
+  }
+
+  /**
+   * Attempts to extract PRD structure from markdown-formatted output
+   * when JSON extraction fails
+   */
+  private extractPRDFromMarkdown(text: string): string | null {
+    try {
+      // Look for project name in headers
+      const nameMatch = text.match(/^#\s+(?:Project:\s*)?(.+)$/m) ||
+                        text.match(/(?:Project|Name):\s*(.+)$/mi);
+      if (!nameMatch) return null;
+
+      // Look for description
+      const descMatch = text.match(/(?:Description|Overview):\s*(.+?)(?:\n\n|\n#|\n-)/is) ||
+                        text.match(/^(?!#)(?!-\s)(.{20,}?)(?:\n\n|\n#|\n-)/m);
+      if (!descMatch) return null;
+
+      // Look for tasks (bullet points or numbered lists)
+      const taskMatches = [...text.matchAll(/^(?:[-*]|\d+\.)\s+(.+?)(?:\n|$)/gm)];
+      if (taskMatches.length === 0) return null;
+
+      // Build PRD object - safely access match groups
+      const projectName = nameMatch[1];
+      const projectDesc = descMatch[1];
+      if (!projectName || !projectDesc) return null;
+
+      const prd = {
+        name: projectName.trim(),
+        description: projectDesc.trim(),
+        tasks: taskMatches.map((match, index) => {
+          const taskTitle = match[1] ?? "Untitled task";
+          return {
+            id: `${String(index + 1).padStart(3, "0")}-task`,
+            title: taskTitle.trim(),
+            description: taskTitle.trim(),
+            priority: index + 1,
+            acceptanceCriteria: [],
+          };
+        }),
+      };
+
+      return JSON.stringify(prd);
+    } catch {
+      return null;
+    }
   }
 
   // ==========================================================================

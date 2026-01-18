@@ -589,7 +589,7 @@ describe("PlanService", () => {
       const result = planService.parsePRDOutput(JSON.stringify(prdJson));
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("at least one task");
+      expect(result.error).toContain("tasks array");
     });
 
     test("returns error for empty tasks array", () => {
@@ -705,6 +705,163 @@ describe("PlanService", () => {
       const task = result.tasks![0]!;
       expect(task.createdAt).toBeDefined();
       expect(task.updatedAt).toBeDefined();
+    });
+  });
+
+  // ============================================================================
+  // PRD extraction strategies (per spec 02-planning.md)
+  // ============================================================================
+
+  describe("PRD extraction strategies", () => {
+    test("extractFromCodeBlock: parses PRD from ```json block", () => {
+      const prdJson = {
+        name: "Code Block Project",
+        description: "Extracted from code block",
+        tasks: [{ id: "001-task", title: "Task", description: "Do it", priority: 1, acceptanceCriteria: [] }],
+      };
+
+      const raw = `Some text before\n\`\`\`json\n${JSON.stringify(prdJson, null, 2)}\n\`\`\`\nSome text after`;
+      const result = planService.parsePRDOutput(raw);
+
+      expect(result.success).toBe(true);
+      expect(result.prd?.name).toBe("Code Block Project");
+      expect(result.attemptedStrategies).toContain("extractFromCodeBlock");
+    });
+
+    test("extractFromMarkers: parses PRD after 'Here is your PRD:' marker", () => {
+      const prdJson = {
+        name: "Marker Project",
+        description: "Found via marker",
+        tasks: [{ id: "001-task", title: "Task", description: "Do it", priority: 1, acceptanceCriteria: [] }],
+      };
+
+      const raw = `I've analyzed your requirements.\n\nHere is your PRD: ${JSON.stringify(prdJson)}`;
+      const result = planService.parsePRDOutput(raw);
+
+      expect(result.success).toBe(true);
+      expect(result.prd?.name).toBe("Marker Project");
+      expect(result.attemptedStrategies).toContain("extractFromMarkers");
+    });
+
+    test("extractFromMarkers: parses PRD after 'PRD:' marker", () => {
+      const prdJson = {
+        name: "Direct PRD Marker",
+        description: "Found via PRD: marker",
+        tasks: [{ id: "001-task", title: "Task", description: "Do it", priority: 1, acceptanceCriteria: [] }],
+      };
+
+      const raw = `PRD: ${JSON.stringify(prdJson)}`;
+      const result = planService.parsePRDOutput(raw);
+
+      expect(result.success).toBe(true);
+      expect(result.prd?.name).toBe("Direct PRD Marker");
+    });
+
+    test("extractLooseJSON: parses loose JSON object", () => {
+      const prdJson = {
+        name: "Loose JSON Project",
+        description: "Found as loose JSON",
+        tasks: [{ id: "001-task", title: "Task", description: "Do it", priority: 1, acceptanceCriteria: [] }],
+      };
+
+      const raw = `Based on our discussion, I've created this: ${JSON.stringify(prdJson)} Hope this helps!`;
+      const result = planService.parsePRDOutput(raw);
+
+      expect(result.success).toBe(true);
+      expect(result.prd?.name).toBe("Loose JSON Project");
+      expect(result.attemptedStrategies).toContain("extractLooseJSON");
+    });
+
+    test("extractFromMarkdown: parses markdown structure when no JSON", () => {
+      const raw = `# My Todo App
+
+Description: A simple todo application for managing daily tasks
+
+## Tasks
+- Set up React project
+- Create task component
+- Add local storage persistence`;
+
+      const result = planService.parsePRDOutput(raw);
+
+      expect(result.success).toBe(true);
+      expect(result.prd?.name).toBe("My Todo App");
+      expect(result.prd?.description).toContain("simple todo application");
+      expect(result.prd?.tasks.length).toBe(3);
+      expect(result.attemptedStrategies).toContain("extractFromMarkdown");
+    });
+
+    test("returns error code NO_JSON_FOUND when all strategies fail", () => {
+      const raw = "Just some plain text without any structure";
+      const result = planService.parsePRDOutput(raw);
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("NO_JSON_FOUND");
+      expect(result.attemptedStrategies).toBeDefined();
+      expect(result.attemptedStrategies!.length).toBeGreaterThan(0);
+    });
+
+    test("returns error code MISSING_NAME when name is missing", () => {
+      const prdJson = { description: "No name field", tasks: [] };
+      const result = planService.parsePRDOutput(JSON.stringify(prdJson));
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("MISSING_NAME");
+    });
+
+    test("returns error code MISSING_DESCRIPTION when description is missing", () => {
+      const prdJson = { name: "Has name", tasks: [] };
+      const result = planService.parsePRDOutput(JSON.stringify(prdJson));
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("MISSING_DESCRIPTION");
+    });
+
+    test("returns error code MISSING_TASKS when tasks array is missing", () => {
+      const prdJson = { name: "Project", description: "Desc" };
+      const result = planService.parsePRDOutput(JSON.stringify(prdJson));
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("MISSING_TASKS");
+    });
+
+    test("returns error code EMPTY_TASKS when tasks array is empty", () => {
+      const prdJson = { name: "Project", description: "Desc", tasks: [] };
+      const result = planService.parsePRDOutput(JSON.stringify(prdJson));
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("EMPTY_TASKS");
+    });
+
+    test("returns error code INVALID_TASK when task is malformed", () => {
+      const prdJson = {
+        name: "Project",
+        description: "Desc",
+        tasks: [{ title: "No ID" }], // Missing id
+      };
+      const result = planService.parsePRDOutput(JSON.stringify(prdJson));
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("INVALID_TASK");
+    });
+
+    test("rawOutput is preserved for recovery UI", () => {
+      const raw = "Some output that failed to parse properly";
+      const result = planService.parsePRDOutput(raw);
+
+      expect(result.rawOutput).toBe(raw);
+    });
+
+    test("strategies are tried in order: codeBlock, markers, looseJSON, markdown", () => {
+      const raw = "No valid content here";
+      const result = planService.parsePRDOutput(raw);
+
+      expect(result.attemptedStrategies).toEqual([
+        "extractFromCodeBlock",
+        "extractFromMarkers",
+        "extractLooseJSON",
+        "extractFromMarkdown",
+      ]);
     });
   });
 
