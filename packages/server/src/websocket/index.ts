@@ -136,6 +136,10 @@ export class WebSocketManager {
       this.broadcast("planning_keepalive", { timestamp, state });
     });
 
+    orchestrator.onPlanningCompleted(({ prd }) => {
+      this.broadcast("planning_completed", { prd });
+    });
+
     // Register battle event listeners
     orchestrator.onBattleEvent("battle_start", ({ taskId, task }) => {
       this.broadcast("battle_start", { taskId, task });

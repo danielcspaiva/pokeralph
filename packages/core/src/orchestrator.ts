@@ -413,6 +413,15 @@ export class Orchestrator {
   }
 
   /**
+   * Registers a callback for planning completed events
+   *
+   * @param callback - Called when planning completes and a PRD is generated
+   */
+  onPlanningCompleted(callback: (data: { prd: PRD }) => void): void {
+    this.planService.on("planning_completed", callback);
+  }
+
+  /**
    * Answers a planning question
    *
    * @param answer - The user's answer
