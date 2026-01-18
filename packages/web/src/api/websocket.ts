@@ -231,12 +231,14 @@ export type WebSocketEventListener<T extends WebSocketEventType> = (
 // WebSocket Client
 // ==========================================================================
 
-/** WebSocket connection state */
+/** WebSocket connection state per spec (07-websocket.md lines 1142-1149) */
 export type ConnectionState =
   | "disconnected"
   | "connecting"
   | "connected"
-  | "reconnecting";
+  | "reconnecting"
+  | "resyncing"
+  | "offline";
 
 /** WebSocket client options */
 export interface WebSocketClientOptions {
@@ -246,10 +248,25 @@ export interface WebSocketClientOptions {
   autoReconnect?: boolean;
   /** Reconnection delay in milliseconds (default: 1000) */
   reconnectDelay?: number;
+  /** Maximum reconnect delay in milliseconds (default: 30000 per spec) */
+  maxReconnectDelay?: number;
   /** Maximum reconnection attempts (default: 10) */
   maxReconnectAttempts?: number;
   /** Heartbeat interval in milliseconds (default: 25000) */
   heartbeatInterval?: number;
+  /** Callback for state resync after reconnection */
+  onResync?: () => Promise<void>;
+}
+
+/**
+ * Connection status info for UI feedback per spec (07-websocket.md lines 1152-1165)
+ */
+export interface ConnectionStatus {
+  state: ConnectionState;
+  lastConnected: string | null;
+  reconnectAttempt: number;
+  maxAttempts: number;
+  nextAttemptIn: number | null;
 }
 
 /**
@@ -282,16 +299,21 @@ export class WebSocketClient {
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   private connectionId: string | null = null;
+  private lastConnected: string | null = null;
+  private nextAttemptIn: number | null = null;
+  private isReconnecting = false;
 
-  private readonly options: Required<WebSocketClientOptions>;
+  private readonly options: Required<Omit<WebSocketClientOptions, "onResync">> & { onResync?: () => Promise<void> };
 
   constructor(options: WebSocketClientOptions = {}) {
     this.options = {
       url: options.url ?? this.getDefaultUrl(),
       autoReconnect: options.autoReconnect ?? true,
       reconnectDelay: options.reconnectDelay ?? 1000,
+      maxReconnectDelay: options.maxReconnectDelay ?? 30000, // 30s max per spec line 502
       maxReconnectAttempts: options.maxReconnectAttempts ?? 10,
       heartbeatInterval: options.heartbeatInterval ?? 25000,
+      onResync: options.onResync,
     };
   }
 
@@ -329,6 +351,26 @@ export class WebSocketClient {
   }
 
   /**
+   * Gets current connection status for UI feedback per spec (07-websocket.md lines 1152-1165)
+   */
+  getConnectionStatus(): ConnectionStatus {
+    return {
+      state: this.connectionState,
+      lastConnected: this.lastConnected,
+      reconnectAttempt: this.reconnectAttempts,
+      maxAttempts: this.options.maxReconnectAttempts,
+      nextAttemptIn: this.nextAttemptIn,
+    };
+  }
+
+  /**
+   * Sets the resync callback for state synchronization after reconnection
+   */
+  setResyncCallback(callback: () => Promise<void>): void {
+    this.options.onResync = callback;
+  }
+
+  /**
    * Establishes WebSocket connection
    */
   connect(): void {
@@ -340,10 +382,28 @@ export class WebSocketClient {
     this.connectionState = "connecting";
     this.socket = new WebSocket(this.options.url);
 
-    this.socket.onopen = () => {
+    this.socket.onopen = async () => {
       log("Connected successfully");
+      const wasReconnecting = this.isReconnecting;
+      this.lastConnected = new Date().toISOString();
+      this.nextAttemptIn = null;
+
+      // If reconnecting and we have a resync callback, perform state resync per spec
+      if (wasReconnecting && this.options.onResync) {
+        this.connectionState = "resyncing";
+        log("Resyncing state after reconnection");
+        try {
+          await this.options.onResync();
+          log("Resync completed successfully");
+        } catch (error) {
+          logError("Resync failed", error);
+          // Continue anyway - partial state is better than no connection
+        }
+      }
+
       this.connectionState = "connected";
       this.reconnectAttempts = 0;
+      this.isReconnecting = false;
       this.startHeartbeat();
     };
 
@@ -369,6 +429,8 @@ export class WebSocketClient {
     this.cleanup();
     this.connectionState = "disconnected";
     this.connectionId = null;
+    this.isReconnecting = false;
+    this.nextAttemptIn = null;
   }
 
   /**
@@ -492,24 +554,34 @@ export class WebSocketClient {
   }
 
   /**
-   * Schedules a reconnection attempt
+   * Schedules a reconnection attempt with exponential backoff per spec (07-websocket.md lines 494-505)
+   * Uses max delay cap of 30 seconds per spec line 502
    */
   private scheduleReconnect(): void {
     if (this.reconnectAttempts >= this.options.maxReconnectAttempts) {
       console.error("[WebSocket] Max reconnection attempts reached");
-      this.connectionState = "disconnected";
+      this.connectionState = "offline"; // Set to offline per spec line 1149
+      this.nextAttemptIn = null;
       return;
     }
 
     this.connectionState = "reconnecting";
+    this.isReconnecting = true;
     this.reconnectAttempts++;
 
-    const delay = this.options.reconnectDelay * 2 ** (this.reconnectAttempts - 1);
-    console.log(
-      `[WebSocket] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.options.maxReconnectAttempts})`
+    // Exponential backoff capped at maxReconnectDelay (30s per spec)
+    const delay = Math.min(
+      this.options.reconnectDelay * 2 ** (this.reconnectAttempts - 1),
+      this.options.maxReconnectDelay
+    );
+    this.nextAttemptIn = delay;
+
+    log(
+      `Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.options.maxReconnectAttempts})`
     );
 
     this.reconnectTimeout = setTimeout(() => {
+      this.nextAttemptIn = null;
       this.connect();
     }, delay);
   }
@@ -633,4 +705,23 @@ export function off<T extends WebSocketEventType>(
   if (wsClient) {
     wsClient.off(event, callback);
   }
+}
+
+/**
+ * Gets the current connection status from the global WebSocket client
+ * Returns status info for UI feedback per spec (07-websocket.md lines 1152-1165)
+ */
+export function getConnectionStatus(): ConnectionStatus | null {
+  if (wsClient) {
+    return wsClient.getConnectionStatus();
+  }
+  return null;
+}
+
+/**
+ * Sets the resync callback on the global WebSocket client
+ * This callback is called after reconnection to sync state
+ */
+export function setResyncCallback(callback: () => Promise<void>): void {
+  getWebSocketClient().setResyncCallback(callback);
 }

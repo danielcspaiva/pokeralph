@@ -31,8 +31,16 @@ import {
 } from "@pokeralph/core/types";
 import {
   getWebSocketClient,
+  setResyncCallback,
   type WebSocketEventPayloads,
 } from "../api/websocket.ts";
+import {
+  getConfig,
+  getPRD,
+  getCurrentBattle,
+  getPlanningStatus,
+  getWorkingDir,
+} from "../api/client.ts";
 
 // ==========================================================================
 // State Types
@@ -522,6 +530,91 @@ export const useIsAwaitingApproval = () =>
 // ==========================================================================
 
 /**
+ * Resyncs state from server after WebSocket reconnection per spec (07-websocket.md lines 784-967)
+ * Fetches current state via REST APIs and updates the store
+ */
+async function resyncStateFromServer(): Promise<void> {
+  const log = (action: string, data?: unknown) => {
+    console.log(`%c[PokéRalph][Resync] ${action}`, "color: #f59e0b; font-weight: bold", data ?? "");
+  };
+
+  try {
+    // Fetch all state in parallel for efficiency
+    const [workingDirResult, configResult, prdResult, battleResult, planningResult] = await Promise.allSettled([
+      getWorkingDir(),
+      getConfig(),
+      getPRD(),
+      getCurrentBattle(),
+      getPlanningStatus(),
+    ]);
+
+    // Update working directory
+    if (workingDirResult.status === "fulfilled") {
+      useAppStore.setState({
+        workingDir: workingDirResult.value.workingDir,
+        hasPokeralphFolder: workingDirResult.value.hasPokeralphFolder,
+      });
+      log("Working dir synced", workingDirResult.value);
+    }
+
+    // Update config
+    if (configResult.status === "fulfilled") {
+      useAppStore.setState({ config: configResult.value });
+      log("Config synced");
+    }
+
+    // Update PRD and tasks
+    if (prdResult.status === "fulfilled") {
+      useAppStore.setState({
+        prd: prdResult.value,
+        tasks: prdResult.value.tasks,
+      });
+      log("PRD synced", { taskCount: prdResult.value.tasks.length });
+    }
+
+    // Update battle state
+    if (battleResult.status === "fulfilled") {
+      const battle = battleResult.value;
+      if (battle.battle) {
+        useAppStore.setState({
+          currentBattle: {
+            taskId: battle.battle.taskId,
+            iteration: battle.battle.iteration,
+            status: battle.battle.status,
+            mode: battle.battle.mode,
+            isRunning: battle.isRunning,
+            isPaused: battle.isPaused,
+            isAwaitingApproval: battle.isAwaitingApproval,
+          },
+        });
+        log("Battle synced", { taskId: battle.battle.taskId });
+      } else {
+        useAppStore.setState({ currentBattle: null });
+        log("No active battle");
+      }
+    }
+
+    // Update planning state
+    if (planningResult.status === "fulfilled") {
+      const planning = planningResult.value;
+      useAppStore.setState((state) => ({
+        planningSession: {
+          ...state.planningSession,
+          state: planning.state,
+          pendingQuestion: planning.pendingQuestion,
+        },
+      }));
+      log("Planning synced", { state: planning.state });
+    }
+
+    log("State resync completed");
+  } catch (error) {
+    console.error("[PokéRalph][Resync] Failed to resync state", error);
+    throw error;
+  }
+}
+
+/**
  * Sets up WebSocket listeners to automatically update the store
  *
  * Call this once during app initialization to sync store with server events.
@@ -538,6 +631,9 @@ export const useIsAwaitingApproval = () =>
  */
 export function setupWebSocketListeners(): () => void {
   const wsClient = getWebSocketClient();
+
+  // Register resync callback for reconnection handling per spec (07-websocket.md lines 831-889)
+  setResyncCallback(resyncStateFromServer);
 
   // Handler for connected event
   const handleConnected = (
