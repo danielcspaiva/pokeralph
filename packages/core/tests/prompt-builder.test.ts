@@ -276,7 +276,8 @@ A fantastic project that does amazing things.
     test("includes task ID format guidelines", () => {
       const prompt = builder.buildBreakdownPrompt("Any PRD");
 
-      expect(prompt).toContain("XXX-");
+      // Task ID format: NNN-task-name (e.g., 001-setup-monorepo)
+      expect(prompt).toContain("NNN-");
       expect(prompt).toContain("001-");
     });
 

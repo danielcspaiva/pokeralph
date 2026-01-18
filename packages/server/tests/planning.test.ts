@@ -343,6 +343,49 @@ describe("Planning Routes", () => {
   });
 
   // ==========================================================================
+  // POST /api/planning/refine-tasks
+  // ==========================================================================
+
+  describe("POST /api/planning/refine-tasks", () => {
+    test("returns 400 when no PRD exists", async () => {
+      const res = await app.fetch(
+        new Request("http://localhost/api/planning/refine-tasks", {
+          method: "POST",
+        })
+      );
+
+      expect(res.status).toBe(400);
+
+      const data = await res.json();
+      expect(data.error).toBe("NO_PRD");
+      expect(data.message).toContain("No PRD exists");
+    });
+
+    test("returns 503 when orchestrator is not initialized", async () => {
+      resetServerState();
+
+      const res = await app.fetch(
+        new Request("http://localhost/api/planning/refine-tasks", {
+          method: "POST",
+        })
+      );
+
+      expect(res.status).toBe(503);
+
+      const data = await res.json();
+      expect(data.error).toBe("SERVICE_UNAVAILABLE");
+    });
+
+    test("GET method returns 404 (only POST allowed)", async () => {
+      const res = await app.fetch(
+        new Request("http://localhost/api/planning/refine-tasks")
+      );
+
+      expect(res.status).toBe(404);
+    });
+  });
+
+  // ==========================================================================
   // Integration - Endpoint Documentation
   // ==========================================================================
 

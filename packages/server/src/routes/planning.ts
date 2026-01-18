@@ -256,10 +256,63 @@ export function createPlanningRoutes(): Hono {
   });
 
   /**
+   * POST /api/planning/refine-tasks
+   *
+   * Break PRD into refined tasks using Claude.
+   * Per spec 02-planning.md: Uses current PRD to generate refined task list.
+   *
+   * @returns {{ success: boolean, tasks: Task[] }}
+   * @throws {400} If no PRD exists
+   * @throws {500} If task parsing fails
+   * @throws {503} If orchestrator is not initialized
+   */
+  router.post("/refine-tasks", async (c) => {
+    const orchestrator = requireOrchestrator();
+
+    // Get current PRD
+    const prd = await orchestrator.getPRD();
+    if (!prd) {
+      throw new AppError("No PRD exists. Complete planning first.", 400, "NO_PRD");
+    }
+
+    log("POST /refine-tasks - starting task refinement");
+
+    try {
+      // Generate refined tasks
+      const tasks = await orchestrator.breakIntoTasks(prd);
+
+      // Update PRD with new tasks
+      const updatedPRD = {
+        ...prd,
+        tasks,
+        updatedAt: new Date().toISOString(),
+      };
+
+      // Save updated PRD
+      await orchestrator.savePRD(updatedPRD);
+
+      log("POST /refine-tasks - tasks refined", { count: tasks.length });
+
+      return c.json({
+        success: true,
+        tasks,
+      });
+    } catch (error) {
+      log("POST /refine-tasks - ERROR", { error: error instanceof Error ? error.message : error });
+      throw new AppError(
+        `Failed to refine tasks: ${error instanceof Error ? error.message : error}`,
+        500,
+        "TASK_PARSE_FAILED"
+      );
+    }
+  });
+
+  /**
    * POST /api/planning/breakdown
    *
    * Breaks down the current PRD into more detailed tasks.
    * Replaces existing tasks with the refined breakdown.
+   * Note: This is an alias for /refine-tasks for backward compatibility.
    *
    * @returns {{ message: string, tasks: Task[], prd: PRD }}
    * @throws {409} If no PRD exists

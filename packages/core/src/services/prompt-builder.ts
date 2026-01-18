@@ -178,15 +178,17 @@ Work iteratively:
 
   /**
    * PRD breakdown introduction
+   * Per spec 02-planning.md US-PL-4: tasks should be "appropriately scoped"
+   * and "small enough for a single battle" (1-3 iterations)
    */
   BREAKDOWN_INTRO: `Your goal is to break down the following PRD into individual, actionable tasks.
 
 Each task should:
-- Be completable in 1-10 iterations
+- Be completable in 1-3 iterations (appropriately scoped for a single battle)
 - Have clear acceptance criteria
 - Be independent when possible (minimize dependencies)
-- Include a unique ID in format: XXX-task-name (e.g., 001-setup-monorepo)
-- Have a priority number (lower = higher priority)`,
+- Include a unique ID in format: NNN-task-name (e.g., 001-setup-monorepo)
+- Have a priority number (lower = higher priority, 1 is highest)`,
 
   /**
    * Progress update instructions
@@ -434,9 +436,9 @@ ${prdContent}
 ## Task Guidelines
 
 1. **Ordering:** Tasks should be ordered by dependency and priority
-2. **Granularity:** Each task should be achievable in 1-10 Claude iterations
+2. **Granularity:** Each task should be achievable in 1-3 Claude iterations (appropriately scoped for a single battle)
 3. **Independence:** Minimize dependencies between tasks when possible
-4. **IDs:** Use format XXX-short-name (e.g., 001-setup-monorepo, 002-define-types)
+4. **IDs:** Use format NNN-short-name (e.g., 001-setup-monorepo, 002-define-types)
 5. **Acceptance Criteria:** Be specific and testable
 
 ## Output Format
