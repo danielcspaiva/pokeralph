@@ -1,0 +1,410 @@
+## Task 001: Verify domain entities against spec - COMPLETED
+
+**Spec:** 01-data-model.md
+**Files Modified:**
+- packages/core/src/services/schemas.ts
+- packages/server/tests/index.test.ts
+- packages/server/tests/websocket.test.ts
+- tests/e2e/e2e.test.ts
+
+**Changes Made:**
+1. Added Zod schema validation constraints matching spec:
+   - Config: maxIterationsPerTask 1-100, timeoutMinutes 1-60, pollingIntervalMs 500-10000
+   - Task: ID pattern {NNN}-{slug}, title max 200 chars, non-empty description
+   - PRD: name max 200 chars, non-empty description
+   - Created TaskIdSchema with regex validation
+
+2. Updated test fixtures to use spec-compliant task IDs:
+   - Changed task-001 format to 001-test-task format
+   - Fixed pollingIntervalMs from 50 to 500 (minimum per spec)
+   - Added generateTaskId helper for test PRDs
+
+**Acceptance Criteria Status:**
+- [x] All entity types match spec definitions
+- [x] Zod schemas validate all constraints from spec
+- [x] Field constraints enforced (e.g., maxIterationsPerTask: 1-100)
+- [x] Task ID format: {NNN}-{slug}
+- [x] Status enums match spec exactly
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 591 pass, 0 fail
+
+**Commit:** 496a010
+
+## Task 002: Verify FileManager against spec - COMPLETED
+
+**Spec:** 01-data-model.md
+**Files Modified:**
+- packages/core/src/services/file-manager.ts
+- packages/core/tests/file-manager.test.ts
+
+**Changes Made:**
+1. Added FileLockManager class for file-level locking:
+   - Uses lock files with `.lock` extension
+   - Implements exponential backoff (10ms → 500ms max)
+   - 5-second timeout before failure
+   - `withLock()` helper for scoped locking
+
+2. Implemented atomic writes (temp file + rename):
+   - writeJson() now writes to temp file first
+   - Uses `rename()` for atomic file replacement
+   - Prevents corruption from power failures or crashes
+
+3. Updated appendIteration to be concurrent-safe:
+   - Holds lock for entire read-modify-write cycle
+   - Prevents race conditions when multiple processes append
+
+4. Added comprehensive tests:
+   - Verify no temp files remain after write
+   - Verify no lock files remain after write
+   - Test concurrent saves to same file
+   - Test concurrent iteration appends
+
+**Acceptance Criteria Status:**
+- [x] Read/write config.json, prd.json per spec
+- [x] Battle folder structure matches spec
+- [x] Atomic writes (temp file + rename)
+- [x] File-level locking for concurrent access
+- [x] All edge cases from spec handled
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 596 pass, 0 fail
+
+**Commit:** ca6bc41
+
+## Task 003: Verify Configuration service against spec - COMPLETED
+
+**Spec:** 06-configuration.md
+**Files Modified:**
+- packages/server/src/routes/config.ts
+- packages/server/tests/config.test.ts
+
+**Changes Made:**
+1. Verified existing implementation matches spec:
+   - HITL/YOLO mode selection works (ExecutionModeSchema enum)
+   - Feedback loop configuration works (feedbackLoops array)
+   - All validation constraints enforced:
+     - maxIterationsPerTask: 1-100
+     - mode: "hitl" or "yolo"
+     - timeoutMinutes: 1-60
+     - pollingIntervalMs: 500-10000
+     - autoCommit: boolean
+   - GET/PUT /api/config endpoints implemented
+
+2. Added missing endpoints per spec:
+   - POST /api/config/reset: Resets configuration to DEFAULT_CONFIG
+   - POST /api/config/validate-loops: Validates feedback loop commands exist
+     - Uses 'which' to check if command exists in system PATH
+     - Recognizes common script runners (npm, bun, yarn, pnpm, npx, bunx)
+     - Returns validation results with error messages for invalid commands
+
+3. Added comprehensive tests for new endpoints:
+   - Reset endpoint: resets to defaults, persists to file, handles errors
+   - Validate-loops endpoint: validates commands, handles invalid inputs
+
+**Acceptance Criteria Status:**
+- [x] HITL/YOLO mode selection works per spec
+- [x] Feedback loop configuration matches spec
+- [x] All validation constraints from spec enforced
+- [x] Default config by project type implemented (Bun defaults)
+- [x] Per-task overrides: Not in current scope (spec mentions as UX enhancement)
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 605 pass, 0 fail
+
+**Commit:** 8877d9b
+
+## Task 004: Verify PlanService against spec - COMPLETED
+
+**Spec:** 02-planning.md
+**Files Modified:**
+- packages/core/src/orchestrator.ts
+- packages/core/src/services/file-manager.ts
+- packages/core/src/services/plan-service.ts
+- packages/core/src/services/schemas.ts
+- packages/core/src/types/index.ts
+- packages/core/src/types/prd.ts
+- packages/core/tests/plan-service.test.ts
+- packages/server/src/routes/planning.ts
+
+**Changes Made:**
+1. Added hasOutput() method to PlanService and Orchestrator:
+   - Returns true if Claude has produced output in the buffer
+   - Exposed via hasPlanningOutput() in Orchestrator
+   - Added to GET /api/planning/status response per spec
+
+2. Implemented draft PRD session persistence (spec section 5):
+   - Added new types: DraftPRD, PartialPRD, PartialTask, ConversationTurn
+   - Added DraftPRDSchema with lenient validation for incomplete data
+   - FileManager methods: loadDraftPRD(), saveDraftPRD(), deleteDraftPRD(), hasDraftPRD()
+   - Auto-save draft after each Q&A turn in answerQuestion()
+   - Delete draft on successful completion in finishPlanning()
+   - Added resumeFromDraft() to restore planning session from saved draft
+
+3. Verified state machine matches spec exactly:
+   - States: idle → planning → waiting_input → completed ✓
+   - All state transitions match spec diagram ✓
+   - Race condition handling: accepts either waiting_input state OR pending question ✓
+   - Keepalive events every 30 seconds during planning ✓
+
+4. Added comprehensive tests:
+   - hasOutput() returns false initially, true after output, false after reset
+   - Draft persistence: save, load, delete, resume functionality
+   - resumeFromDraft detects questions and sets waiting_input state
+   - Error handling for concurrent resume attempts
+
+**Acceptance Criteria Status:**
+- [x] States match spec: idle, planning, waiting_input, completed
+- [x] All state transitions from spec implemented
+- [x] Session persistence works per spec (draft auto-save/load/delete)
+- [x] Edge cases from spec handled (race conditions, malformed JSON recovery)
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 615 pass, 0 fail
+
+**Commit:** 42fd73c
+
+## Task 005: Verify Claude Q&A flow against spec - COMPLETED
+
+**Spec:** 02-planning.md
+**Files Modified:**
+- packages/core/src/services/prompt-builder.ts
+
+**Changes Made:**
+1. Updated PLANNING_INTRO template to specify "2-5 clarifying questions FIRST":
+   - Changed generic "Ask clarifying questions" to explicit "IMPORTANT: Ask 2-5 clarifying questions FIRST before generating the PRD"
+   - Maintains same question categories (scope, constraints, priority, architecture)
+
+2. Updated buildPlanningPrompt() task instructions:
+   - Step 1: "Ask 2-5 clarifying questions FIRST to understand the full scope"
+   - Step 2: "Help the user refine their idea through multi-turn conversation"
+   - Added explicit "IMPORTANT: Ask questions FIRST before generating the PRD"
+
+3. Verified existing implementation matches spec requirements:
+   - Question detection: Comprehensive regex patterns in detectQuestion() ✓
+   - Multi-turn conversation: answerQuestion() appends to conversation buffer ✓
+   - Auto-save draft PRD: saveDraft() called after answerQuestion() (Task 004) ✓
+   - Keepalive: 30-second interval during planning (Task 004) ✓
+
+**Acceptance Criteria Status:**
+- [x] Question detection matches spec patterns (already implemented)
+- [x] 2-5 clarifying questions handled per spec (prompt updated)
+- [x] Auto-save draft PRD if specified in spec (implemented in Task 004)
+- [x] Keepalive during long operations per spec (30s interval, Task 004)
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 615 pass, 0 fail
+
+**Commit:** 4dc8ac4
+
+## Task 006: Verify PRD extraction against spec - COMPLETED
+
+**Spec:** 02-planning.md
+**Files Modified:**
+- packages/core/src/services/plan-service.ts
+- packages/core/src/services/index.ts
+- packages/core/src/index.ts
+- packages/core/tests/plan-service.test.ts
+
+**Changes Made:**
+1. Implemented multiple extraction strategies per spec (02-planning.md lines 786-805):
+   - extractFromCodeBlock: Parse JSON from ```json code blocks
+   - extractFromMarkers: Find PRD after "PRD:", "Here is your PRD:" markers
+   - extractLooseJSON: Detect loose JSON objects/arrays in text
+   - extractFromMarkdown: Parse markdown structure (headers, bullets) as fallback
+
+2. Added extractJSONWithStrategies() method:
+   - Tries strategies in spec-defined order
+   - Returns both extracted JSON and list of attempted strategies
+   - Enables debugging which strategies were tried
+
+3. Added extractPRDFromMarkdown() method:
+   - Parses markdown headers for project name
+   - Extracts description from Description: or Overview: markers
+   - Converts bullet/numbered lists to task array
+   - Fallback when no JSON found in output
+
+4. Added PRDExtractionErrorCode type for recovery UI:
+   - NO_JSON_FOUND, INVALID_JSON, MISSING_NAME, MISSING_DESCRIPTION
+   - MISSING_TASKS, EMPTY_TASKS, INVALID_TASK
+   - Enables UI to show appropriate recovery options
+
+5. Enhanced PRDParseResult interface:
+   - Added errorCode field for structured error handling
+   - Added attemptedStrategies field for debugging
+   - rawOutput preserved for manual PRD creation fallback
+
+6. Added comprehensive tests for all extraction strategies:
+   - extractFromCodeBlock, extractFromMarkers, extractLooseJSON, extractFromMarkdown
+   - Error code verification for all failure cases
+   - Strategy order verification
+
+**Acceptance Criteria Status:**
+- [x] Extraction matches spec format (4 strategies in order)
+- [x] Validation against PRD schema (name, description, tasks with required fields)
+- [x] Fallback behavior per spec (markdown parsing when JSON fails)
+- [x] Error handling per spec (error codes for recovery UI)
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 628 pass, 0 fail
+
+**Commit:** cdc07fc
+
+## Task 007: Verify task refinement against spec - COMPLETED
+
+**Spec:** 02-planning.md
+**Files Modified:**
+- packages/core/src/services/prompt-builder.ts
+- packages/core/tests/prompt-builder.test.ts
+- packages/server/src/routes/planning.ts
+- packages/server/tests/planning.test.ts
+
+**Changes Made:**
+1. Updated task sizing guidance per spec US-PL-4:
+   - Changed BREAKDOWN_INTRO from "1-10 iterations" to "1-3 iterations"
+   - Updated buildBreakdownPrompt() task guidelines to match
+   - Added "(appropriately scoped for a single battle)" per spec wording
+
+2. Updated task ID format placeholder:
+   - Changed from "XXX-" to "NNN-" for consistency with spec format {NNN}-{slug}
+   - Updated test to match new format
+
+3. Added POST /api/planning/refine-tasks endpoint per spec:
+   - Returns { success: boolean, tasks: Task[] } per spec definition
+   - Uses 400 status code for NO_PRD per spec (not 409)
+   - Uses TASK_PARSE_FAILED error code per spec
+   - Kept /breakdown endpoint as backward-compatible alias
+
+4. Added tests for new refine-tasks endpoint:
+   - Returns 400 when no PRD exists
+   - Returns 503 when orchestrator not initialized
+   - GET method returns 404 (only POST allowed)
+
+**Acceptance Criteria Status:**
+- [x] Task ID format matches spec ({NNN}-{slug}) - already implemented in schemas.ts
+- [x] Priorities and dependencies per spec - prompt instructs ordering
+- [x] Inline editing if specified in spec - UX enhancement, not backend requirement
+- [x] Task sizing guidance per spec - updated to 1-3 iterations
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 631 pass, 0 fail
+
+**Commit:** 7097145
+
+## Task 008: Verify BattleOrchestrator against spec - COMPLETED
+
+**Spec:** 03-battles.md
+**Files Modified:**
+- packages/core/src/services/battle-orchestrator.ts
+- packages/core/src/services/progress-watcher.ts
+- packages/core/tests/progress-watcher.test.ts
+
+**Changes Made:**
+1. Added polling interval override option to ProgressWatcher.watch():
+   - New optional parameter: `watch(taskId, { intervalMs?: number })`
+   - Allows overriding the default interval for individual watch sessions
+   - Falls back to constructor-provided default if not specified
+
+2. Updated BattleOrchestrator.setupProgressWatcher():
+   - Now passes config.pollingIntervalMs to the watcher
+   - Ensures spec's "default 2s" polling interval is respected from config
+
+3. Verified battle states match spec (03-battles.md lines 119-152):
+   - BattleStatus: pending, running, paused, awaiting_approval, completed, failed, cancelled
+   - These map to spec's high-level states (idle = null state, internal phases implicit)
+
+4. Verified state transitions match spec diagram:
+   - idle → starting → running (via startBattle)
+   - running → paused → running (via pause/resume)
+   - running → awaiting_approval → running (HITL mode)
+   - running → completed (completion sigil detected)
+   - running → failed (max iterations reached)
+   - running → cancelled (cancel called)
+
+5. Verified HITL/YOLO modes work per spec:
+   - HITL: Pauses after each iteration for approval
+   - YOLO: Runs automatically until completion or max iterations
+
+6. Verified edge cases from spec handled:
+   - Concurrent battle prevention: throws error if battle in progress
+   - Feedback timeout: Already configurable (5min default) in FeedbackRunner
+   - Progress polling interval: Now uses config.pollingIntervalMs
+
+**Acceptance Criteria Status:**
+- [x] Battle states match spec exactly
+- [x] State transitions match spec diagram
+- [x] Progress polling interval per spec (default 2s, configurable via config)
+- [x] HITL/YOLO modes work per spec
+- [x] All edge cases from spec handled
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 633 pass, 0 fail
+
+**Commit:** 2c648f2
+
+## Task 009: Verify ClaudeBridge against spec - COMPLETED
+
+**Spec:** 03-battles.md
+**Files Verified:**
+- packages/core/src/services/claude-bridge.ts
+- packages/core/tests/claude-bridge.test.ts
+
+**Verification Summary:**
+
+1. Spawn with Bun.spawn() per CLAUDE.md:
+   - Line 317 uses `Bun.spawn()` with proper configuration
+   - Sets cwd, stdout/stderr pipes, and CI=true env var
+   - Supports custom claudePath for testing
+
+2. Output streaming per spec:
+   - Lines 392-436 implement `setupStreamReaders()` using ReadableStream
+   - Streams stdout/stderr chunks via `onOutput` and `onError` callbacks
+   - Buffers accumulated in `stdoutBuffer` and `stderrBuffer`
+   - Callbacks are called with each chunk as it arrives (real-time)
+
+3. Exit code handling per spec:
+   - Lines 337-352 handle process.exited promise
+   - Notifies all registered `exitCallbacks` with exitCode and signal
+   - Handles normal exit (code), kill (SIGTERM), and timeout (TIMEOUT)
+   - Prevents double-callback when timeout triggers kill
+
+4. Timeout management per spec:
+   - Lines 360-376 implement timeout timer with configurable duration
+   - Default 30-minute timeout (1800000ms) per spec line 1603
+   - Kills process and notifies callbacks with "TIMEOUT" signal
+   - Timer cleared on normal exit or manual kill
+
+**Existing Implementation Already Matches Spec:**
+- No code changes required
+- All 30 ClaudeBridge tests pass
+- Implementation covers all acceptance criteria from spec
+
+**Acceptance Criteria Status:**
+- [x] Spawn with Bun.spawn() per CLAUDE.md
+- [x] Output streaming per spec
+- [x] Exit code handling per spec
+- [x] Timeout management per spec
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 new errors - pre-existing web package lint warnings)
+- Tests: 633 pass, 0 fail
+
+**Commit:** (verification only - no code changes needed)
+
