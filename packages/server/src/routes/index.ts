@@ -11,6 +11,7 @@ import { createPRDRoutes } from "./prd.ts";
 import { createPlanningRoutes } from "./planning.ts";
 import { createBattleRoutes } from "./battle.ts";
 import { createRepoRoutes } from "./repo.ts";
+import { createOnboardingRoutes } from "./onboarding.ts";
 
 /**
  * Creates the main API router with all routes grouped.
@@ -33,6 +34,8 @@ export function createRoutes(): Hono {
           "POST /api/planning/start, /answer, /finish, /reset; GET /api/planning/status",
         battle:
           "POST /api/battle/start/:taskId, /pause, /resume, /cancel, /approve; GET /api/battle/current, /:taskId/progress, /:taskId/history",
+        onboarding:
+          "POST /api/onboarding/detect, /complete; GET /api/onboarding/status",
       },
     });
   });
@@ -56,6 +59,10 @@ export function createRoutes(): Hono {
   // Battle routes (Task 016)
   const battleRoutes = createBattleRoutes();
   api.route("/battle", battleRoutes);
+
+  // Onboarding routes (Task 021)
+  const onboardingRoutes = createOnboardingRoutes();
+  api.route("/onboarding", onboardingRoutes);
 
   return api;
 }

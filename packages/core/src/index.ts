@@ -76,6 +76,15 @@ export {
   FeedbackResultSchema,
   FeedbackResultsSchema,
   PRDMetadataSchema,
+  // ProjectDetection
+  detectProject,
+  getSuggestedConfig,
+  hasLowTrustDefaults,
+  getDetectionGuidance,
+  PROJECT_DEFAULTS,
+  UNKNOWN_PROJECT_EXPLANATION,
+  type ProjectType,
+  type ProjectDetection,
 } from "./services/index.ts";
 
 // Re-export all types

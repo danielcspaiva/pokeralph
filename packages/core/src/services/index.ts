@@ -70,6 +70,18 @@ export {
 } from "./plan-service.ts";
 
 
+// ProjectDetection - detects project type and suggests configuration
+export {
+  detectProject,
+  getSuggestedConfig,
+  hasLowTrustDefaults,
+  getDetectionGuidance,
+  PROJECT_DEFAULTS,
+  UNKNOWN_PROJECT_EXPLANATION,
+  type ProjectType,
+  type ProjectDetection,
+} from "./project-detection.ts";
+
 // Custom error classes
 export { FileNotFoundError, ValidationError } from "./errors.ts";
 
