@@ -21,6 +21,7 @@ export type WebSocketEventType =
   | "planning_output"
   | "planning_question"
   | "planning_completed"
+  | "planning_keepalive"
   // Battle events
   | "battle_start"
   | "battle_pause"
@@ -102,8 +103,8 @@ export class WebSocketManager {
   /** Heartbeat interval in milliseconds (30 seconds) */
   private readonly heartbeatIntervalMs = 30000;
 
-  /** Connection timeout in milliseconds (120 seconds without pong - longer for Claude responses) */
-  private readonly connectionTimeoutMs = 120000;
+  /** Connection timeout in milliseconds (600 seconds / 10 min - longer for Claude planning responses) */
+  private readonly connectionTimeoutMs = 600000;
 
   /** Orchestrator reference for event listening */
   private orchestrator: Orchestrator | null = null;
@@ -129,6 +130,10 @@ export class WebSocketManager {
 
     orchestrator.onPlanningQuestion(({ question }) => {
       this.broadcast("planning_question", { question });
+    });
+
+    orchestrator.onPlanningKeepalive(({ timestamp, state }) => {
+      this.broadcast("planning_keepalive", { timestamp, state });
     });
 
     // Register battle event listeners

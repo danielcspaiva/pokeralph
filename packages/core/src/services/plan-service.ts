@@ -49,6 +49,8 @@ export interface PlanServiceEvents {
   planning_completed: [{ prd: PRD }];
   /** Emitted when tasks are generated from PRD */
   tasks_generated: [{ tasks: Task[] }];
+  /** Emitted periodically during planning to keep connection alive */
+  keepalive: [{ timestamp: string; state: PlanningState }];
   /** Emitted on error */
   error: [{ message: string; code?: string; details?: unknown }];
 }
@@ -107,6 +109,10 @@ export class PlanService extends EventEmitter {
   private conversationBuffer = "";
   private outputBuffer = "";
   private pendingQuestion: string | null = null;
+  /** Keepalive interval for long-running planning operations */
+  private keepaliveInterval: Timer | null = null;
+  /** Keepalive interval in milliseconds (30 seconds) */
+  private readonly keepaliveIntervalMs = 30000;
 
   /**
    * Creates a new PlanService instance
@@ -461,6 +467,9 @@ export class PlanService extends EventEmitter {
     // Kill any running Claude process
     this.deps.claudeBridge.kill();
 
+    // Stop keepalive interval
+    this.stopKeepalive();
+
     // Reset state
     this.currentIdea = null;
     this.conversationBuffer = "";
@@ -506,6 +515,9 @@ export class PlanService extends EventEmitter {
     return new Promise((resolve) => {
       let currentOutput = "";
 
+      // Start keepalive interval to emit periodic events during long-running planning
+      this.startKeepalive();
+
       this.deps.claudeBridge.onOutput((data) => {
         currentOutput += data;
         this.outputBuffer += data;
@@ -521,6 +533,8 @@ export class PlanService extends EventEmitter {
       });
 
       this.deps.claudeBridge.onExit((_code, signal) => {
+        // Stop keepalive when Claude exits
+        this.stopKeepalive();
         this.deps.claudeBridge.clearCallbacks();
 
         if (signal === "TIMEOUT") {
@@ -555,6 +569,29 @@ export class PlanService extends EventEmitter {
       // Spawn Claude in plan mode
       this.deps.claudeBridge.spawnPlanMode(prompt);
     });
+  }
+
+  /**
+   * Starts the keepalive interval to emit periodic events
+   */
+  private startKeepalive(): void {
+    this.stopKeepalive(); // Clear any existing interval
+    this.keepaliveInterval = setInterval(() => {
+      this.emit("keepalive", {
+        timestamp: new Date().toISOString(),
+        state: this.state,
+      });
+    }, this.keepaliveIntervalMs);
+  }
+
+  /**
+   * Stops the keepalive interval
+   */
+  private stopKeepalive(): void {
+    if (this.keepaliveInterval) {
+      clearInterval(this.keepaliveInterval);
+      this.keepaliveInterval = null;
+    }
   }
 
   /**

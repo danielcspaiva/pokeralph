@@ -404,6 +404,15 @@ export class Orchestrator {
   }
 
   /**
+   * Registers a callback for planning keepalive events
+   *
+   * @param callback - Called periodically during long-running planning operations
+   */
+  onPlanningKeepalive(callback: (data: { timestamp: string; state: string }) => void): void {
+    this.planService.on("keepalive", callback);
+  }
+
+  /**
    * Answers a planning question
    *
    * @param answer - The user's answer
