@@ -121,6 +121,27 @@ export {
   type DryRunContext,
 } from "./dry-run-service.ts";
 
+// RecoveryService - handles failure classification and recovery
+export {
+  classifyFailure,
+  getFailureSeverity,
+  getRecoveryOptions,
+  getFailureMessage,
+  getRecoverySuggestion,
+  getAllRecoverySuggestions,
+  FeedbackLoopError,
+  TimeoutError,
+  ClaudeError,
+  SystemError,
+  CancellationError,
+  CrashError,
+  type FailureType,
+  type RecoveryAction,
+  type BattleFailure,
+  type BattleContext,
+  type FailureSeverity,
+} from "./recovery-service.ts";
+
 // Custom error classes
 export { FileNotFoundError, ValidationError } from "./errors.ts";
 

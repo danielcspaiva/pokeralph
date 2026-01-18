@@ -1214,3 +1214,78 @@ and is not required for the core Task 018 acceptance criteria.
 - Lint: PASS (0 errors in changed files)
 - Tests: 775 pass, 0 fail
 
+**Commit:** c1a479b
+
+## Task 025: Verify dry run against spec - COMPLETED
+
+**Spec:** 10-preflight.md
+**Files Created:**
+- packages/core/src/services/dry-run-service.ts
+- packages/core/tests/dry-run-service.test.ts
+
+**Files Modified:**
+- packages/core/src/index.ts
+- packages/core/src/services/index.ts
+- packages/server/src/routes/preflight.ts
+
+**Changes Made:**
+
+1. Created DryRunService in core package per spec (10-preflight.md lines 755-927):
+   - `runDryRun(context)` - Main method that builds full dry run analysis
+   - Builds actual task prompt using PromptBuilder (not placeholder text)
+   - Includes PRD summary, task context, feedback loops, and completion instructions
+
+2. Implemented sensitive data redaction per spec (lines 800-827):
+   - 10 pattern types: API keys, passwords, secrets/tokens, AWS credentials,
+     private keys, GitHub tokens, OpenAI keys, Anthropic keys, Slack tokens, AWS Access Key IDs
+   - `redactSensitiveData(prompt)` returns redacted version and list of redacted fields
+   - Patterns match common credential formats
+
+3. Implemented file prediction per spec (lines 907-927):
+   - `predictAffectedFiles(task)` extracts files from task description and criteria
+   - Patterns for create/modify verbs, "in/at" locations, and direct file paths
+   - Handles paths with directories (src/, lib/, components/, etc.)
+
+4. Implemented confidence assessment per spec (lines 873-905):
+   - `assessFileConfidence()` - high/medium/low based on explicit mentions
+   - `assessIterationConfidence()` - based on task risk and criteria count
+   - `assessDurationConfidence()` - based on iteration range width
+
+5. Implemented iteration and duration estimation:
+   - `estimateIterations(risk, task)` - uses risk level and criteria count
+   - Duration calculated as 3-5 minutes per iteration
+
+6. Added supporting features:
+   - `countTokens(text)` - estimates token count for prompt
+   - `listRelevantFiles()` - gets git-tracked source files matching task keywords
+   - `measureContextSize()` - calculates total size of relevant files
+   - Risk assessment integration from PreflightService
+
+7. Updated preflight routes to use DryRunService:
+   - POST /api/preflight/dry-run now builds full prompt preview
+   - Requires PRD to exist (needed for prompt building)
+   - Returns complete DryRunResult with all spec fields
+
+8. Added 35 comprehensive tests:
+   - redactSensitiveData: 10 tests for all pattern types
+   - predictAffectedFiles: 5 tests for file extraction
+   - assessFileConfidence: 3 tests for confidence levels
+   - estimateIterations: 3 tests for risk-based estimation
+   - assessIterationConfidence: 3 tests
+   - assessDurationConfidence: 3 tests
+   - countTokens: 3 tests
+   - DryRunService integration: 5 tests
+
+**Acceptance Criteria Status:**
+- [x] Prompt preview per spec (full prompt built with PromptBuilder)
+- [x] Predictions per spec (files, iterations, duration with min/max)
+- [x] Confidence indicators per spec (high/medium/low with reasons)
+- [x] Sensitive data redaction (10 pattern types from spec)
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 810 pass, 0 fail
+
+**Commit:** 52fbd9c
+

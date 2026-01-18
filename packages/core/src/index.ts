@@ -118,6 +118,24 @@ export {
   type ConfidenceLevel,
   type DryRunResult,
   type DryRunContext,
+  // RecoveryService
+  classifyFailure,
+  getFailureSeverity,
+  getRecoveryOptions,
+  getFailureMessage,
+  getRecoverySuggestion,
+  getAllRecoverySuggestions,
+  FeedbackLoopError,
+  TimeoutError,
+  ClaudeError,
+  SystemError,
+  CancellationError,
+  CrashError,
+  type FailureType,
+  type RecoveryAction,
+  type BattleFailure,
+  type BattleContext,
+  type FailureSeverity,
 } from "./services/index.ts";
 
 // Re-export all types
