@@ -17,7 +17,7 @@ export { type Config, type ExecutionMode, DEFAULT_CONFIG } from "./config.ts";
 export { type Task, TaskStatus } from "./task.ts";
 
 // PRD types
-export type { PRD, PRDMetadata } from "./prd.ts";
+export type { PRD, PRDMetadata, DraftPRD, ConversationTurn, PartialPRD, PartialTask } from "./prd.ts";
 
 // Progress types
 export {

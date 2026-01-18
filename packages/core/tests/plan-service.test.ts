@@ -970,4 +970,196 @@ describe("PlanService", () => {
       expect(count).toBe(0);
     });
   });
+
+  // ============================================================================
+  // hasOutput
+  // ============================================================================
+
+  describe("hasOutput", () => {
+    test("returns false when no output", () => {
+      expect(planService.hasOutput()).toBe(false);
+    });
+
+    test("returns true after output received", async () => {
+      const prdJson = JSON.stringify({
+        name: "Test",
+        description: "Description",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
+      });
+
+      process.env.MOCK_CLAUDE_MODE = "output";
+      process.env.MOCK_CLAUDE_OUTPUT = prdJson;
+
+      await planService.startPlanning("Build an app");
+
+      expect(planService.hasOutput()).toBe(true);
+    });
+
+    test("returns false after reset", async () => {
+      const prdJson = JSON.stringify({
+        name: "Test",
+        description: "Description",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
+      });
+
+      process.env.MOCK_CLAUDE_MODE = "output";
+      process.env.MOCK_CLAUDE_OUTPUT = prdJson;
+
+      await planService.startPlanning("Build an app");
+      expect(planService.hasOutput()).toBe(true);
+
+      planService.reset();
+      expect(planService.hasOutput()).toBe(false);
+    });
+  });
+
+  // ============================================================================
+  // Draft PRD persistence
+  // ============================================================================
+
+  describe("draft PRD persistence", () => {
+    test("hasDraft returns false when no draft exists", async () => {
+      const hasDraft = await planService.hasDraft();
+      expect(hasDraft).toBe(false);
+    });
+
+    test("loadDraft returns null when no draft exists", async () => {
+      const draft = await planService.loadDraft();
+      expect(draft).toBeNull();
+    });
+
+    test("draft is saved after answering question", async () => {
+      // Simulate Claude asking a question
+      process.env.MOCK_CLAUDE_MODE = "output";
+      process.env.MOCK_CLAUDE_OUTPUT = "What features do you need?";
+
+      await planService.startPlanning("Build an app");
+
+      // Verify question was detected
+      expect(planService.getState()).toBe("waiting_input");
+
+      // Answer the question - this should trigger draft save
+      const prdJson = JSON.stringify({
+        name: "Test Project",
+        description: "A test project",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
+      });
+      process.env.MOCK_CLAUDE_OUTPUT = `Got it! Here's your PRD:\n\`\`\`json\n${prdJson}\n\`\`\``;
+
+      await planService.answerQuestion("I need authentication");
+
+      // Check if draft was saved via FileManager (hasDraft reads from FileManager)
+      const hasDraft = await deps.fileManager.hasDraftPRD();
+      expect(hasDraft).toBe(true);
+
+      const draft = await deps.fileManager.loadDraftPRD();
+      expect(draft).not.toBeNull();
+      expect(draft?.idea).toBe("Build an app");
+      expect(draft?.version).toBeGreaterThan(0);
+    });
+
+    test("draft is deleted after finishPlanning", async () => {
+      // Set up a valid PRD output
+      const prdJson = JSON.stringify({
+        name: "Test Project",
+        description: "A test project",
+        tasks: [
+          { id: "001-task", title: "Task", description: "Do something", priority: 1, acceptanceCriteria: ["Done"] },
+        ],
+      });
+
+      process.env.MOCK_CLAUDE_MODE = "output";
+      process.env.MOCK_CLAUDE_OUTPUT = "What features?";
+
+      await planService.startPlanning("Build an app");
+
+      // Verify question was detected
+      expect(planService.getState()).toBe("waiting_input");
+
+      process.env.MOCK_CLAUDE_OUTPUT = `\`\`\`json\n${prdJson}\n\`\`\``;
+      await planService.answerQuestion("Auth");
+
+      // Verify draft exists
+      expect(await deps.fileManager.hasDraftPRD()).toBe(true);
+
+      // Finish planning
+      await planService.finishPlanning();
+
+      // Draft should be deleted
+      expect(await deps.fileManager.hasDraftPRD()).toBe(false);
+    });
+
+    test("resumeFromDraft restores state correctly", async () => {
+      // Create a mock draft
+      const draft = {
+        idea: "Build a todo app",
+        conversation: [
+          { role: "assistant" as const, content: "What framework do you prefer?", timestamp: new Date().toISOString() },
+          { role: "user" as const, content: "React", timestamp: new Date().toISOString() },
+        ],
+        lastSavedAt: new Date().toISOString(),
+        version: 1,
+      };
+
+      // Save draft manually
+      await deps.fileManager.saveDraftPRD(draft);
+
+      // Resume from draft
+      await planService.resumeFromDraft(draft);
+
+      // Verify state is restored
+      expect(planService.getConversationBuffer()).toContain("User: React");
+      expect(planService.getConversationBuffer()).toContain("What framework");
+    });
+
+    test("resumeFromDraft detects question and sets waiting_input state", async () => {
+      // Create a mock draft with a question
+      const draft = {
+        idea: "Build a todo app",
+        conversation: [
+          { role: "assistant" as const, content: "What authentication method would you prefer?", timestamp: new Date().toISOString() },
+        ],
+        lastSavedAt: new Date().toISOString(),
+        version: 1,
+      };
+
+      await deps.fileManager.saveDraftPRD(draft);
+
+      await planService.resumeFromDraft(draft);
+
+      // Should be waiting for input since last assistant message was a question
+      expect(planService.getState()).toBe("waiting_input");
+      expect(planService.getPendingQuestion()).not.toBeNull();
+    });
+
+    test("resumeFromDraft throws if already planning", async () => {
+      const draft = {
+        idea: "Build a todo app",
+        conversation: [],
+        lastSavedAt: new Date().toISOString(),
+        version: 1,
+      };
+
+      // Start a planning session
+      process.env.MOCK_CLAUDE_MODE = "timeout";
+      process.env.MOCK_CLAUDE_DELAY = "5000";
+
+      const startPromise = planService.startPlanning("First idea");
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Try to resume - should throw
+      await expect(planService.resumeFromDraft(draft)).rejects.toThrow(
+        /Planning session already in progress/
+      );
+
+      planService.reset();
+      await startPromise.catch(() => {});
+    });
+  });
 });

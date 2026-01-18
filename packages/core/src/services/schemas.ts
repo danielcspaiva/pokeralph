@@ -83,6 +83,51 @@ export const PRDSchema = z.object({
 });
 
 // ============================================================================
+// Draft PRD Schema (for auto-save during planning)
+// ============================================================================
+
+export const ConversationTurnSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string(),
+  timestamp: z.string().datetime(),
+});
+
+/**
+ * Lenient task schema for partial PRDs in drafts - allows missing fields
+ */
+export const PartialTaskSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().optional(),
+  status: TaskStatusSchema.optional(),
+  priority: z.number().optional(),
+  acceptanceCriteria: z.array(z.string()).optional(),
+  iterations: z.array(IterationSchema).optional(),
+  createdAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+});
+
+/**
+ * Partial PRD schema for draft saving - allows missing/optional fields
+ */
+export const PartialPRDSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  tasks: z.array(PartialTaskSchema).optional(),
+  metadata: PRDMetadataSchema.optional(),
+  createdAt: z.string().datetime().optional(),
+  updatedAt: z.string().datetime().optional(),
+});
+
+export const DraftPRDSchema = z.object({
+  idea: z.string().min(1),
+  conversation: z.array(ConversationTurnSchema),
+  partialPRD: PartialPRDSchema.optional(),
+  lastSavedAt: z.string().datetime(),
+  version: z.number().int().nonnegative(),
+});
+
+// ============================================================================
 // Progress Schema
 // ============================================================================
 
@@ -145,6 +190,7 @@ export const BattleSchema = z.object({
 export type ConfigSchema = z.infer<typeof ConfigSchema>;
 export type TaskSchema = z.infer<typeof TaskSchema>;
 export type PRDSchema = z.infer<typeof PRDSchema>;
+export type DraftPRDSchema = z.infer<typeof DraftPRDSchema>;
 export type ProgressSchema = z.infer<typeof ProgressSchema>;
 export type BattleSchema = z.infer<typeof BattleSchema>;
 export type IterationSchema = z.infer<typeof IterationSchema>;

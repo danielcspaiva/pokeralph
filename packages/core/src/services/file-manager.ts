@@ -7,11 +7,12 @@
 
 import { join, dirname } from "node:path";
 import { stat, rename, mkdir } from "node:fs/promises";
-import type { Config, PRD, Progress, Battle, Iteration } from "../types/index.ts";
+import type { Config, PRD, Progress, Battle, Iteration, DraftPRD } from "../types/index.ts";
 import { DEFAULT_CONFIG } from "../types/index.ts";
 import {
   ConfigSchema,
   PRDSchema,
+  DraftPRDSchema,
   ProgressSchema,
   BattleSchema,
 } from "./schemas.ts";
@@ -243,6 +244,51 @@ export class FileManager {
   async savePRD(prd: PRD): Promise<void> {
     const path = this.getPath("prd.json");
     await this.writeJson(path, prd);
+  }
+
+  // ==========================================================================
+  // Draft PRD operations (for planning session persistence)
+  // ==========================================================================
+
+  /**
+   * Loads and validates the draft PRD from `prd.draft.json`
+   * @throws {FileNotFoundError} If prd.draft.json doesn't exist
+   * @throws {ValidationError} If prd.draft.json is invalid
+   */
+  async loadDraftPRD(): Promise<DraftPRD> {
+    const path = this.getPath("prd.draft.json");
+    return this.readAndValidate(path, DraftPRDSchema);
+  }
+
+  /**
+   * Saves the draft PRD to `prd.draft.json`
+   * @param draft - The draft PRD to save
+   */
+  async saveDraftPRD(draft: DraftPRD): Promise<void> {
+    const path = this.getPath("prd.draft.json");
+    await this.writeJson(path, draft);
+  }
+
+  /**
+   * Deletes the draft PRD file if it exists
+   */
+  async deleteDraftPRD(): Promise<void> {
+    const path = this.getPath("prd.draft.json");
+    try {
+      const { unlink } = await import("node:fs/promises");
+      await unlink(path);
+    } catch {
+      // Ignore errors - file might not exist
+    }
+  }
+
+  /**
+   * Checks if a draft PRD exists
+   */
+  async hasDraftPRD(): Promise<boolean> {
+    const path = this.getPath("prd.draft.json");
+    const file = Bun.file(path);
+    return file.exists();
   }
 
   // ==========================================================================

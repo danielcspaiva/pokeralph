@@ -54,8 +54,9 @@ export function createPlanningRoutes(): Hono {
    * GET /api/planning/status
    *
    * Returns the current planning state.
+   * Matches spec: GET /api/planning/state
    *
-   * @returns {{ state: PlanningState, pendingQuestion: string | null }}
+   * @returns {{ state: PlanningState, pendingQuestion: string | null, hasOutput: boolean }}
    * @throws {503} If orchestrator is not initialized
    */
   router.get("/status", (c) => {
@@ -63,12 +64,14 @@ export function createPlanningRoutes(): Hono {
 
     const state = orchestrator.getPlanningState();
     const pendingQuestion = orchestrator.getPlanningQuestion();
+    const hasOutput = orchestrator.hasPlanningOutput();
 
-    log("GET /status", { state, pendingQuestion, isPlanning: orchestrator.isPlanning() });
+    log("GET /status", { state, pendingQuestion, hasOutput, isPlanning: orchestrator.isPlanning() });
 
     return c.json({
       state,
       pendingQuestion,
+      hasOutput,
       isPlanning: orchestrator.isPlanning(),
     });
   });

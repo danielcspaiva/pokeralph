@@ -458,6 +458,15 @@ export class Orchestrator {
   }
 
   /**
+   * Checks if there is accumulated planning output
+   *
+   * @returns True if there is output from Claude
+   */
+  hasPlanningOutput(): boolean {
+    return this.planService.hasOutput();
+  }
+
+  /**
    * Resets the planning service to idle state
    */
   resetPlanning(): void {

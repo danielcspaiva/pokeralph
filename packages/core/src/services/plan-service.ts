@@ -16,7 +16,7 @@ import type { ClaudeBridge } from "./claude-bridge.ts";
 import type { PromptBuilder } from "./prompt-builder.ts";
 import { PRD_OUTPUT_SCHEMA } from "./prompt-builder.ts";
 import type { FileManager } from "./file-manager.ts";
-import type { PRD, Task } from "../types/index.ts";
+import type { PRD, Task, DraftPRD, ConversationTurn, PartialPRD } from "../types/index.ts";
 import { TaskStatus } from "../types/index.ts";
 
 /**
@@ -113,6 +113,10 @@ export class PlanService extends EventEmitter {
   private keepaliveInterval: Timer | null = null;
   /** Keepalive interval in milliseconds (30 seconds) */
   private readonly keepaliveIntervalMs = 30000;
+  /** Conversation turns for draft saving */
+  private conversationTurns: ConversationTurn[] = [];
+  /** Draft version for conflict detection */
+  private draftVersion = 0;
 
   /**
    * Creates a new PlanService instance
@@ -143,6 +147,15 @@ export class PlanService extends EventEmitter {
   }
 
   /**
+   * Checks if the service has accumulated output from Claude
+   *
+   * @returns True if there is output in the buffer
+   */
+  hasOutput(): boolean {
+    return this.outputBuffer.length > 0;
+  }
+
+  /**
    * Starts a new planning session with the given idea
    *
    * @param idea - The initial idea to refine
@@ -162,6 +175,8 @@ export class PlanService extends EventEmitter {
     this.conversationBuffer = "";
     this.outputBuffer = "";
     this.pendingQuestion = null;
+    this.conversationTurns = [];
+    this.draftVersion = 0;
 
     // Transition to planning state
     this.setState("planning");
@@ -191,6 +206,13 @@ export class PlanService extends EventEmitter {
       throw new Error(`Not waiting for input. Current state: ${this.state}`);
     }
 
+    // Track the user's answer in conversation turns
+    this.conversationTurns.push({
+      role: "user",
+      content: answer,
+      timestamp: new Date().toISOString(),
+    });
+
     // Clear the pending question
     this.pendingQuestion = null;
 
@@ -203,6 +225,9 @@ export class PlanService extends EventEmitter {
     // Continue the conversation with context
     const continuationPrompt = this.buildContinuationPrompt(answer);
     await this.runClaudePlanning(continuationPrompt);
+
+    // Auto-save draft after Q&A turn
+    await this.saveDraft();
   }
 
   /**
@@ -229,6 +254,9 @@ export class PlanService extends EventEmitter {
 
     // Transition to completed
     this.setState("completed");
+
+    // Delete draft on successful completion
+    await this.deleteDraft();
 
     // Emit planning_completed event
     this.emit("planning_completed", { prd });
@@ -475,6 +503,8 @@ export class PlanService extends EventEmitter {
     this.conversationBuffer = "";
     this.outputBuffer = "";
     this.pendingQuestion = null;
+    this.conversationTurns = [];
+    this.draftVersion = 0;
     this.setState("idle");
   }
 
@@ -775,6 +805,149 @@ ${JSON.stringify(PRD_OUTPUT_SCHEMA, null, 2)}
     }
 
     return null;
+  }
+
+  // ==========================================================================
+  // Draft PRD methods (session persistence)
+  // ==========================================================================
+
+  /**
+   * Saves the current planning session as a draft
+   * Called automatically after each Q&A turn
+   */
+  private async saveDraft(): Promise<void> {
+    if (!this.currentIdea) {
+      log("saveDraft - no current idea, skipping");
+      return;
+    }
+
+    // Track assistant's output in conversation turns
+    if (this.outputBuffer) {
+      // Add the last assistant response if we have output
+      const lastAssistantTurn = this.conversationTurns.find(
+        (t, i) => t.role === "assistant" && i === this.conversationTurns.length - 1
+      );
+      if (!lastAssistantTurn) {
+        this.conversationTurns.push({
+          role: "assistant",
+          content: this.outputBuffer,
+          timestamp: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Try to extract partial PRD from current output
+    let partialPRD: PartialPRD | undefined;
+    const jsonStr = this.extractJSON(this.outputBuffer);
+    if (jsonStr) {
+      try {
+        const parsed = JSON.parse(jsonStr);
+        if (parsed.name || parsed.description) {
+          partialPRD = {
+            name: parsed.name,
+            description: parsed.description,
+            tasks: parsed.tasks,
+          };
+        }
+      } catch {
+        // Ignore parse errors for partial PRD
+      }
+    }
+
+    this.draftVersion++;
+    const draft: DraftPRD = {
+      idea: this.currentIdea,
+      conversation: this.conversationTurns,
+      partialPRD,
+      lastSavedAt: new Date().toISOString(),
+      version: this.draftVersion,
+    };
+
+    try {
+      await this.deps.fileManager.saveDraftPRD(draft);
+      log("saveDraft - draft saved", { version: this.draftVersion });
+    } catch (error) {
+      // Don't fail the planning flow if draft save fails
+      log("saveDraft - failed to save draft", { error: error instanceof Error ? error.message : error });
+    }
+  }
+
+  /**
+   * Deletes the draft PRD file
+   * Called when planning completes successfully
+   */
+  private async deleteDraft(): Promise<void> {
+    try {
+      await this.deps.fileManager.deleteDraftPRD();
+      log("deleteDraft - draft deleted");
+    } catch (error) {
+      // Don't fail if draft deletion fails
+      log("deleteDraft - failed to delete draft", { error: error instanceof Error ? error.message : error });
+    }
+  }
+
+  /**
+   * Checks if a draft PRD exists
+   *
+   * @returns True if a draft exists
+   */
+  async hasDraft(): Promise<boolean> {
+    return this.deps.fileManager.hasDraftPRD();
+  }
+
+  /**
+   * Loads and returns the draft PRD if it exists
+   *
+   * @returns The draft PRD or null if none exists
+   */
+  async loadDraft(): Promise<DraftPRD | null> {
+    try {
+      return await this.deps.fileManager.loadDraftPRD();
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Resumes a planning session from a saved draft
+   *
+   * @param draft - The draft to resume from
+   */
+  async resumeFromDraft(draft: DraftPRD): Promise<void> {
+    if (this.isPlanning()) {
+      throw new Error("Planning session already in progress");
+    }
+
+    log("resumeFromDraft - resuming from draft", { idea: draft.idea.substring(0, 50), version: draft.version });
+
+    // Restore state from draft
+    this.currentIdea = draft.idea;
+    this.conversationTurns = [...draft.conversation];
+    this.draftVersion = draft.version;
+
+    // Rebuild conversation buffer from turns
+    this.conversationBuffer = draft.conversation
+      .map((turn) => `${turn.role === "user" ? "User" : "Assistant"}: ${turn.content}`)
+      .join("\n\n");
+
+    // Set output buffer if we have partial PRD or last assistant message
+    const lastAssistantTurn = draft.conversation.filter((t) => t.role === "assistant").pop();
+    this.outputBuffer = lastAssistantTurn?.content || "";
+
+    // Set state based on conversation
+    // If the last turn was from assistant with a question, go to waiting_input
+    if (lastAssistantTurn) {
+      const question = this.detectQuestion(lastAssistantTurn.content);
+      if (question) {
+        this.pendingQuestion = question;
+        this.setState("waiting_input");
+        this.emit("question", { question });
+      } else {
+        this.setState("planning");
+      }
+    } else {
+      this.setState("planning");
+    }
   }
 
   // ==========================================================================
