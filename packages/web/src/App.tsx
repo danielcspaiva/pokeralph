@@ -6,7 +6,7 @@
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout.tsx";
-import { Dashboard, Planning, Battle, History, Onboarding } from "@/views/index.ts";
+import { Dashboard, Planning, Battle, History, Onboarding, Preflight } from "@/views/index.ts";
 
 /**
  * Main application component with routing
@@ -21,6 +21,7 @@ export function App() {
           <Route path="/planning" element={<Planning />} />
           <Route path="/task/:taskId" element={<Battle />} />
           <Route path="/history/:taskId" element={<History />} />
+          <Route path="/preflight/:taskId" element={<Preflight />} />
         </Routes>
       </Layout>
     </BrowserRouter>

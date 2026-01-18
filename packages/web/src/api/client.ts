@@ -822,3 +822,248 @@ export async function completeOnboarding(
     body: JSON.stringify(data),
   });
 }
+
+// ==========================================================================
+// Preflight Endpoints (per spec 10-preflight.md)
+// ==========================================================================
+
+/**
+ * Preflight check category
+ */
+export type PreflightCheckCategory = "environment" | "git" | "config" | "task" | "system";
+
+/**
+ * Preflight check severity
+ */
+export type PreflightCheckSeverity = "error" | "warning" | "info";
+
+/**
+ * Result of a single preflight check
+ */
+export interface PreflightResult {
+  passed: boolean;
+  message: string;
+  details?: string;
+  canProceed: boolean;
+  suggestion?: string;
+}
+
+/**
+ * Preflight check result DTO (API response format)
+ */
+export interface PreflightCheckResultDTO {
+  check: {
+    id: string;
+    name: string;
+    description: string;
+    category: PreflightCheckCategory;
+    severity: PreflightCheckSeverity;
+    hasAutoFix: boolean;
+  };
+  result: PreflightResult;
+  duration: number;
+}
+
+/**
+ * Preflight summary
+ */
+export interface PreflightSummary {
+  total: number;
+  passed: number;
+  warnings: number;
+  errors: number;
+  infos: number;
+}
+
+/**
+ * Preflight report DTO (API response format)
+ */
+export interface PreflightReportDTO {
+  taskId: string;
+  timestamp: string;
+  duration: number;
+  results: PreflightCheckResultDTO[];
+  summary: PreflightSummary;
+  canStart: boolean;
+  stashRef?: string;
+  preflightToken?: string;
+}
+
+/**
+ * Response from running preflight checks
+ */
+export interface PreflightRunResponse {
+  report: PreflightReportDTO;
+}
+
+/**
+ * Fix result
+ */
+export interface FixResult {
+  success: boolean;
+  message: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Response from applying a fix
+ */
+export interface PreflightFixResponse {
+  result: FixResult;
+  updatedCheck: PreflightCheckResultDTO;
+}
+
+/**
+ * Response from restoring stash
+ */
+export interface RestoreStashResponse {
+  result: FixResult;
+}
+
+/**
+ * Dry run result
+ */
+export interface DryRunResult {
+  taskId: string;
+  timestamp: string;
+  prompt: {
+    full: string;
+    redacted: string;
+    redactedFields: string[];
+  };
+  promptTokens: number;
+  filesLikelyAffected: {
+    files: string[];
+    confidence: "high" | "medium" | "low";
+    reason: string;
+  };
+  estimatedIterations: {
+    min: number;
+    max: number;
+    confidence: "high" | "medium" | "low";
+    reason: string;
+  };
+  estimatedDuration: {
+    min: number;
+    max: number;
+    confidence: "high" | "medium" | "low";
+    reason: string;
+  };
+  existingFiles: string[];
+  contextSize: number;
+  config?: {
+    mode: ExecutionMode;
+    maxIterationsPerTask: number;
+    feedbackLoops: string[];
+    autoCommit: boolean;
+  };
+}
+
+/**
+ * Response from dry run
+ */
+export interface DryRunResponse {
+  result: DryRunResult;
+}
+
+/**
+ * Response from validating preflight token
+ */
+export interface ValidateTokenResponse {
+  valid: boolean;
+  taskId?: string;
+  timestamp?: string;
+  expired?: boolean;
+}
+
+/**
+ * Available preflight check info
+ */
+export interface PreflightCheckInfo {
+  id: string;
+  name: string;
+  description: string;
+  category: PreflightCheckCategory;
+  severity: PreflightCheckSeverity;
+  hasAutoFix: boolean;
+}
+
+/**
+ * Response from listing available checks
+ */
+export interface PreflightChecksResponse {
+  checks: PreflightCheckInfo[];
+}
+
+/**
+ * Runs preflight checks for a task
+ *
+ * @param taskId - The task to run preflight for
+ */
+export async function runPreflight(taskId: string): Promise<PreflightRunResponse> {
+  return request<PreflightRunResponse>("/api/preflight/run", {
+    method: "POST",
+    body: JSON.stringify({ taskId }),
+  });
+}
+
+/**
+ * Applies a fix for a preflight check
+ *
+ * @param taskId - The task ID
+ * @param checkId - The check to fix
+ */
+export async function applyPreflightFix(
+  taskId: string,
+  checkId: string
+): Promise<PreflightFixResponse> {
+  return request<PreflightFixResponse>("/api/preflight/fix", {
+    method: "POST",
+    body: JSON.stringify({ taskId, checkId }),
+  });
+}
+
+/**
+ * Restores stashed changes after battle
+ *
+ * @param stashRef - The stash reference to restore
+ */
+export async function restoreStash(stashRef: string): Promise<RestoreStashResponse> {
+  return request<RestoreStashResponse>("/api/preflight/restore-stash", {
+    method: "POST",
+    body: JSON.stringify({ stashRef }),
+  });
+}
+
+/**
+ * Runs a dry run analysis for a task
+ *
+ * @param taskId - The task to analyze
+ */
+export async function runDryRun(taskId: string): Promise<DryRunResponse> {
+  return request<DryRunResponse>("/api/preflight/dry-run", {
+    method: "POST",
+    body: JSON.stringify({ taskId }),
+  });
+}
+
+/**
+ * Validates a preflight token
+ *
+ * @param token - The token to validate
+ */
+export async function validatePreflightToken(
+  token: string
+): Promise<ValidateTokenResponse> {
+  return request<ValidateTokenResponse>("/api/preflight/validate-token", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
+/**
+ * Gets all available preflight checks
+ */
+export async function getPreflightChecks(): Promise<PreflightChecksResponse> {
+  return request<PreflightChecksResponse>("/api/preflight/checks");
+}

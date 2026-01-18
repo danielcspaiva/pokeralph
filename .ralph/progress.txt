@@ -887,3 +887,330 @@ and is not required for the core Task 018 acceptance criteria.
 - Lint: PASS (0 errors in changed files)
 - Tests: 643 pass, 0 fail
 
+**Commit:** 055306a
+
+## Task 020: Verify repository selection against spec - COMPLETED
+
+**Spec:** 08-repositories.md
+**Files Created:**
+- packages/server/src/routes/repo.ts
+- packages/server/tests/repo.test.ts
+
+**Files Modified:**
+- packages/server/src/routes/index.ts
+- packages/web/src/api/client.ts
+- packages/web/src/components/RepoSelector.tsx
+
+**Changes Made:**
+
+1. Created new repo routes per spec (08-repositories.md lines 116-236):
+   - POST /api/repo/select: Select and initialize a repository
+     - Validates path exists, is directory, is git repo (has .git folder)
+     - Returns error codes: INVALID_PATH, NOT_A_DIRECTORY, NOT_A_GIT_REPO
+     - Broadcasts repo_changed event via WebSocket
+     - Adds to recent repos list
+   - GET /api/repo/current: Get current repository info
+   - POST /api/repo/init: Initialize .pokeralph folder
+   - GET /api/repo/validate: Validate a path with detailed results
+   - GET /api/repo/recent: Get recently used repositories
+   - DELETE /api/repo/recent/:path: Remove from recent list
+
+2. Added path validation per spec (lines 359-377):
+   - Checks: exists, isDirectory, isGitRepo, hasPokeralph
+   - Returns errors array with descriptive messages
+
+3. Updated web API client with new endpoints:
+   - selectRepo, getCurrentRepo, initRepo, validateRepo
+   - getRecentRepos, removeRecentRepo
+   - Kept legacy working-dir endpoints for backwards compatibility
+
+4. Updated RepoSelector component per spec UI (lines 240-302):
+   - Shows recent repositories list
+   - Live path validation with debounce (500ms)
+   - Validation indicator showing: directory exists, is git repo, has .pokeralph
+   - Accessible button interactions
+
+5. Added 20 tests for repo routes covering:
+   - Path validation (git repo, non-git, non-existent)
+   - Repository selection with error cases
+   - Recent repos list management
+   - Init and current endpoints
+
+**Acceptance Criteria Status:**
+- [x] Path validation per spec (exists, is directory, is git repo)
+- [x] Recent repos per spec (stored in memory, validated on fetch)
+- [x] Initialization per spec (creates .pokeralph folder)
+- [x] Switch confirmation per spec (checks for running battle)
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 663 pass, 0 fail
+
+**Commit:** b26099e
+
+## Task 021: Verify project detection against spec - COMPLETED
+
+**Spec:** 09-onboarding.md
+**Files Created:**
+- packages/core/src/services/project-detection.ts
+- packages/core/tests/project-detection.test.ts
+- packages/server/src/routes/onboarding.ts
+- packages/server/tests/onboarding.test.ts
+
+**Files Modified:**
+- packages/core/src/index.ts
+- packages/core/src/services/index.ts
+- packages/server/src/routes/index.ts
+
+**Changes Made:**
+
+1. Created ProjectDetection service in core package:
+   - `detectProject(workingDir)` - detects project type and configuration
+   - `getSuggestedConfig(detection)` - returns default config for project type
+   - `hasLowTrustDefaults(detection)` - checks if conservative defaults apply
+   - `getDetectionGuidance(detection)` - returns guidance for unknown projects
+
+2. Implemented project detection per spec (09-onboarding.md lines 131-227):
+   - Detect Bun: Checks for BOTH bun.lockb (binary) AND bun.lock (text)
+   - Detect Node: Checks for pnpm-lock.yaml, yarn.lock, package-lock.json
+   - Detect Python: Checks for pyproject.toml or requirements.txt
+   - Detect Go: Checks for go.mod
+   - Detect Rust: Checks for Cargo.toml
+   - Framework detection: nextjs, remix, nuxt, vue, react, svelte, hono, express, fastify, nestjs
+   - Test runner detection: vitest, jest, mocha, ava, bun:test
+   - Linter detection: biome, eslint, rome
+   - TypeScript detection: from dependencies or tsconfig.json
+
+3. Added PROJECT_DEFAULTS per project type (spec lines 380-424):
+   - bun/node: ["test", "lint", "typecheck"], autoCommit: true
+   - python: ["pytest", "ruff", "mypy"], autoCommit: true
+   - go: ["go test", "golangci-lint"], autoCommit: true
+   - rust: ["cargo test", "cargo clippy"], autoCommit: true
+   - unknown: [], autoCommit: false (conservative defaults for safety)
+
+4. Created onboarding routes (spec lines 671-718):
+   - POST /api/onboarding/detect: Detect project and suggest config
+   - POST /api/onboarding/complete: Save config and complete onboarding
+   - GET /api/onboarding/status: Check if onboarding is complete
+
+5. FIX: Added bun.lock (text) detection alongside bun.lockb (binary):
+   - Per spec line 171-173: "Check for both bun.lockb (binary) and bun.lock (text, newer versions)"
+   - Newer Bun versions use text-based bun.lock files
+
+6. Added clearIncompatibleMetadata() per spec lines 238-252:
+   - Clears Node-specific fields when detecting Python/Go/Rust
+   - Prevents inconsistent detection data in mixed projects
+
+7. Added 56 comprehensive tests covering:
+   - All package manager detection (bun, npm, pnpm, yarn)
+   - Framework, test runner, linter detection
+   - TypeScript detection from multiple sources
+   - Python, Go, Rust project detection
+   - Mixed project handling (clears incompatible metadata)
+   - Existing .pokeralph folder detection
+   - Onboarding route endpoints
+
+**Acceptance Criteria Status:**
+- [x] Detect Bun: bun.lock OR bun.lockb
+- [x] All project types from spec (bun, node, python, go, rust, unknown)
+- [x] Default config per type (with PROJECT_DEFAULTS)
+- [x] Unknown project handling per spec (conservative defaults)
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 719 pass, 0 fail
+
+**Commit:** 725b6a4
+
+## Task 022: Verify onboarding wizard against spec - COMPLETED
+
+**Spec:** 09-onboarding.md
+**Files Created:**
+- packages/web/src/views/Onboarding.tsx
+
+**Files Modified:**
+- packages/web/src/api/client.ts
+- packages/web/src/App.tsx
+- packages/web/src/views/index.ts
+
+**Changes Made:**
+
+1. Created multi-step onboarding wizard (09-onboarding.md lines 56-89):
+   - Welcome step: Explains PokéRalph workflow (Plan, Battle, Ship)
+   - Detection step: Shows detected project type and features
+   - Config step: Mode selection, feedback loops, limits configuration
+   - PRD guidance step: Template selection and tips for first PRD
+   - Complete step: Success message with quick tips
+
+2. Implemented Welcome Screen per spec (lines 93-124):
+   - Hero text explaining the tool
+   - Three-card layout showing Plan, Battle, Ship workflow
+   - "Get Started" and "I know what I'm doing" buttons
+
+3. Implemented Project Detection UI per spec (lines 294-372):
+   - Shows detected features: package manager, framework, test runner, linter, TypeScript
+   - Special handling for unknown project types with conservative defaults warning
+   - Detection item components with check icons for detected features
+
+4. Implemented Configuration Wizard per spec (lines 476-520):
+   - HITL/YOLO mode toggle with descriptions
+   - Feedback loops checkboxes (test, lint, typecheck, format:check)
+   - Max iterations slider (1-50)
+   - Timeout input (1-60 minutes)
+   - Auto-commit toggle
+
+5. Implemented First PRD Guidance per spec (lines 525-598):
+   - Three options: template, blank canvas, skip for now
+   - 9 template cards: Web App, REST API, Mobile App, CLI Tool, Library, Test Suite, Refactor, Bug Fix, New Feature
+   - Tips section for writing good PRDs
+
+6. Implemented Completion Screen per spec (lines 602-634):
+   - Success message with checkmark icon
+   - Shows config path
+   - Quick tips list
+
+7. Added onboarding API functions to client.ts:
+   - detectProject(): POST /api/onboarding/detect
+   - getOnboardingStatus(): GET /api/onboarding/status
+   - completeOnboarding(): POST /api/onboarding/complete
+   - ProjectDetection and related response types
+
+8. Added /onboarding route to App.tsx
+
+9. Progress indicator component showing current step in wizard flow
+
+**Acceptance Criteria Status:**
+- [x] All steps from spec (welcome, detection, config, prd-guidance, complete)
+- [x] Project detection step with feature display
+- [x] First PRD guidance per spec (templates, tips, skip option)
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 719 pass, 0 fail
+
+**Commit:** c5df179
+
+## Task 023: Verify preflight checks against spec - COMPLETED
+
+**Spec:** 10-preflight.md
+**Files Created:**
+- packages/core/src/services/preflight-service.ts
+- packages/core/tests/preflight-service.test.ts
+- packages/server/src/routes/preflight.ts
+- packages/server/tests/preflight.test.ts
+
+**Files Modified:**
+- packages/core/src/index.ts
+- packages/core/src/services/index.ts
+- packages/server/src/routes/index.ts
+
+**Verification Summary:**
+
+1. All check types from spec implemented (10-preflight.md lines 131-166):
+   - Environment: claude_cli (error), disk_space (warning), memory (info)
+   - Git: repo_status (warning), branch_tracking (info), conflicts (error)
+   - Config: config_valid (error), feedback_loops (error), iteration_limit (info)
+   - Task: task_status (error), no_concurrent (error), acceptance_criteria (warning), task_complexity (info)
+
+2. Error vs warning distinction matches spec:
+   - Errors block battle start (canProceed: false)
+   - Warnings allow proceeding with caution (canProceed: true)
+   - Info is purely informational (canProceed: true)
+
+3. Fix suggestions provided for applicable checks:
+   - claude_cli: Install Claude CLI command
+   - disk_space: Free up disk space guidance
+   - repo_status: Stash changes (has auto-fix)
+   - conflicts: Resolve merge conflicts
+   - feedback_loops: Fix command paths
+   - task_status: Choose pending/in_progress task
+   - no_concurrent: Wait for current battle
+   - acceptance_criteria: Add criteria guidance
+
+4. PreflightCheckResult DTO properly strips function references:
+   - toPreflightCheckResultDTO() converts check to DTO
+   - Replaces check/fix functions with hasAutoFix boolean
+   - Tests verify no function references in API response
+
+5. Fixed test issues:
+   - Server tests now use createApp() with globalErrorHandler
+   - Core tests add files to git before stashing (stash requires tracked files)
+
+**API Endpoints:**
+- POST /api/preflight/run - Run all preflight checks for a task
+- POST /api/preflight/fix - Apply auto-fix for a check
+- POST /api/preflight/restore-stash - Restore stashed changes
+- POST /api/preflight/dry-run - Preview battle without changes
+- POST /api/preflight/validate-token - Validate preflight token
+- GET /api/preflight/checks - List available checks
+
+**Acceptance Criteria Status:**
+- [x] All check types from spec implemented
+- [x] Error vs warning distinction per spec
+- [x] Fix suggestions per spec
+- [x] PreflightCheckResult DTO (no functions in API response)
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in preflight files)
+- Tests: 775 pass, 0 fail
+
+**Commit:** 3707d47
+
+## Task 024: Verify preflight UI against spec - COMPLETED
+
+**Spec:** 10-preflight.md
+**Files Created:**
+- packages/web/src/views/Preflight.tsx
+
+**Files Modified:**
+- packages/web/src/api/client.ts
+- packages/web/src/views/index.ts
+- packages/web/src/App.tsx
+
+**Changes Made:**
+
+1. Created Preflight.tsx view component per spec (10-preflight.md lines 646-750):
+   - TaskSummary component showing task details (title, description, priority, criteria)
+   - ChecksList component grouped by category (environment, git, config, task)
+   - CheckRow component with status icons, messages, details toggle, and fix buttons
+   - SummaryCard showing passed/warning/error counts and proceed status
+   - ConfigDisplay showing battle configuration (mode, iterations, loops, auto-commit)
+   - ErrorState component for blocking errors display
+   - StashRestore component for restoring stashed changes (visible per spec requirement)
+   - DryRunView component showing estimated outcomes, files affected, prompt preview
+   - ConfidenceIndicator component using filled/empty circles per spec
+
+2. Added preflight API functions to client.ts:
+   - runPreflight(taskId): POST /api/preflight/run
+   - applyPreflightFix(taskId, checkId): POST /api/preflight/fix
+   - restoreStash(stashRef): POST /api/preflight/restore-stash
+   - runDryRun(taskId): POST /api/preflight/dry-run
+   - validatePreflightToken(token): POST /api/preflight/validate-token
+   - getPreflightChecks(): GET /api/preflight/checks
+   - All associated TypeScript types (PreflightReportDTO, PreflightCheckResultDTO, DryRunResult, etc.)
+
+3. Added /preflight/:taskId route to App.tsx
+
+4. UI features implemented per spec:
+   - Check display per spec with pass/fail/warning/info icons
+   - Fix actions with "Fix" button for checks with hasAutoFix: true
+   - Preflight token shown in report when canStart is true
+   - Stash restore action visible when stashRef exists in report
+   - Dry run button with confidence indicators and prompt preview
+   - Redacted fields warning and "Show full prompt" toggle
+
+**Acceptance Criteria Status:**
+- [x] Check display per spec (grouped by category with status icons)
+- [x] Fix actions per spec (Fix button for hasAutoFix checks)
+- [x] Preflight token per spec (returned when canStart is true)
+- [x] Stash restore action visible (StashRestore component shows when stashRef exists)
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 775 pass, 0 fail
+
