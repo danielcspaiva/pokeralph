@@ -435,6 +435,13 @@ export function Battle() {
     }
   }, [battleProgress]);
 
+  // Sync task from store (e.g., when battle_complete updates task status)
+  useEffect(() => {
+    if (storeTask) {
+      setTask(storeTask);
+    }
+  }, [storeTask]);
+
   // Load task and battle state on mount
   useEffect(() => {
     async function loadData() {

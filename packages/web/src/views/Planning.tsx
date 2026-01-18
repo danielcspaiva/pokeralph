@@ -577,6 +577,22 @@ export function Planning() {
     }
   }, [planningOutput]);
 
+  // Clear loading state when planning state changes to waiting_input or completed
+  // This handles the case where WebSocket events arrive before HTTP responses
+  useEffect(() => {
+    if (planningState === "waiting_input" || planningState === "completed") {
+      setIsLoading(false);
+    }
+  }, [planningState]);
+
+  // Transition to review stage when planning completes via WebSocket
+  useEffect(() => {
+    if (planningState === "completed" && existingPRD && stage !== "review") {
+      setGeneratedPRD(existingPRD);
+      setStage("review");
+    }
+  }, [planningState, existingPRD, stage]);
+
   // Check for existing planning session on mount
   useEffect(() => {
     const setPendingQuestion = useAppStore.getState().setPendingQuestion;

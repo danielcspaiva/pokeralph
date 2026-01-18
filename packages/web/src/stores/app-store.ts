@@ -681,9 +681,13 @@ export function setupWebSocketListeners(): () => void {
 
   // Handler for planning completed
   const handlePlanningCompleted = (
-    _payload: WebSocketEventPayloads["planning_completed"],
+    payload: WebSocketEventPayloads["planning_completed"],
     _timestamp: string
   ) => {
+    // Set the PRD and planning state
+    if (payload.prd) {
+      useAppStore.setState({ prd: payload.prd });
+    }
     useAppStore.getState().setPlanningState("completed");
   };
 

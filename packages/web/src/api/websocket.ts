@@ -14,7 +14,7 @@ const logError = (action: string, error: unknown) => {
   console.error(`%c[PokéRalph][WS] ${action}`, "color: #ef4444; font-weight: bold", error);
 };
 
-import type { Progress, Battle, Task, FeedbackResult } from "@pokeralph/core/types";
+import type { Progress, Battle, Task, FeedbackResult, PRD } from "@pokeralph/core/types";
 
 // ==========================================================================
 // WebSocket Event Types
@@ -202,7 +202,7 @@ export interface WebSocketEventPayloads {
   pong: { timestamp?: string };
   planning_output: PlanningOutputPayload;
   planning_question: PlanningQuestionPayload;
-  planning_completed: Record<string, never>;
+  planning_completed: { prd: PRD };
   battle_start: BattleStartPayload;
   battle_pause: BattlePausePayload;
   battle_resume: BattleResumePayload;
