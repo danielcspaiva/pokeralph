@@ -357,6 +357,104 @@ describe("FileManager", () => {
   });
 
   // ============================================================================
+  // Atomic writes and file locking
+  // ============================================================================
+
+  describe("atomic writes", () => {
+    test("does not leave temp files on successful write", async () => {
+      await fm.init();
+      const customConfig: Config = {
+        ...DEFAULT_CONFIG,
+        maxIterationsPerTask: 15,
+      };
+
+      await fm.saveConfig(customConfig);
+
+      // Check that no temp files remain
+      const pokeralphPath = fm.getPokeRalphPath();
+      const files = await Array.fromAsync(
+        new Bun.Glob("*.tmp.*").scan({ cwd: pokeralphPath, absolute: true })
+      );
+      expect(files).toHaveLength(0);
+    });
+
+    test("does not leave lock files on successful write", async () => {
+      await fm.init();
+      const customConfig: Config = {
+        ...DEFAULT_CONFIG,
+        maxIterationsPerTask: 15,
+      };
+
+      await fm.saveConfig(customConfig);
+
+      // Check that no lock files remain
+      const pokeralphPath = fm.getPokeRalphPath();
+      const files = await Array.fromAsync(
+        new Bun.Glob("*.lock").scan({ cwd: pokeralphPath, absolute: true })
+      );
+      expect(files).toHaveLength(0);
+    });
+
+    test("write is atomic - data is readable immediately after write", async () => {
+      await fm.init();
+      const prd = createTestPRD();
+
+      // Save and immediately read back
+      await fm.savePRD(prd);
+      const loaded = await fm.loadPRD();
+
+      expect(loaded.name).toBe(prd.name);
+      expect(loaded.tasks).toHaveLength(1);
+    });
+  });
+
+  describe("concurrent access", () => {
+    test("handles concurrent saves to the same file", async () => {
+      await fm.init();
+
+      // Create multiple concurrent saves
+      const saves = Array.from({ length: 5 }, (_, i) => {
+        const config: Config = {
+          ...DEFAULT_CONFIG,
+          maxIterationsPerTask: i + 1,
+        };
+        return fm.saveConfig(config);
+      });
+
+      // All should complete without errors
+      await Promise.all(saves);
+
+      // Final config should be valid
+      const config = await fm.loadConfig();
+      expect(config.maxIterationsPerTask).toBeGreaterThanOrEqual(1);
+      expect(config.maxIterationsPerTask).toBeLessThanOrEqual(5);
+    });
+
+    test("handles concurrent appends to battle history", async () => {
+      await fm.init();
+      const taskId = "001-test-task";
+      await fm.createBattleFolder(taskId);
+
+      const battle = createBattle(taskId);
+      await fm.saveBattleHistory(taskId, battle);
+
+      // Create multiple concurrent iteration appends
+      const appends = Array.from({ length: 3 }, (_, i) => {
+        const iteration = createIteration(i + 1);
+        iteration.output = `Iteration ${i + 1}`;
+        return fm.appendIteration(taskId, iteration);
+      });
+
+      // All should complete without errors
+      await Promise.all(appends);
+
+      // Final history should have all iterations
+      const loaded = await fm.loadBattleHistory(taskId);
+      expect(loaded.iterations).toHaveLength(3);
+    });
+  });
+
+  // ============================================================================
   // Validation edge cases
   // ============================================================================
 

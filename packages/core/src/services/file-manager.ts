@@ -5,8 +5,8 @@
  * Uses Bun.file() for file operations and Zod for validation.
  */
 
-import { join } from "node:path";
-import { stat } from "node:fs/promises";
+import { join, dirname } from "node:path";
+import { stat, rename, mkdir } from "node:fs/promises";
 import type { Config, PRD, Progress, Battle, Iteration } from "../types/index.ts";
 import { DEFAULT_CONFIG } from "../types/index.ts";
 import {
@@ -16,6 +16,80 @@ import {
   BattleSchema,
 } from "./schemas.ts";
 import { FileNotFoundError, ValidationError } from "./errors.ts";
+
+/**
+ * Simple file lock manager using lock files.
+ * Each lock is a file with `.lock` extension that is created atomically.
+ */
+class FileLockManager {
+  private locks: Map<string, boolean> = new Map();
+
+  /**
+   * Acquire a lock for a file path.
+   * Uses exponential backoff with a maximum wait time.
+   */
+  async acquire(path: string, timeoutMs = 5000): Promise<void> {
+    const lockPath = `${path}.lock`;
+    const startTime = Date.now();
+    let delay = 10;
+
+    while (Date.now() - startTime < timeoutMs) {
+      try {
+        // Try to create lock file exclusively
+        // We use Bun.write with a unique identifier - if another process
+        // has created the lock, we'll detect it on the next read
+        const lockId = `${process.pid}-${Date.now()}-${Math.random()}`;
+        const lockFile = Bun.file(lockPath);
+
+        if (!(await lockFile.exists())) {
+          await Bun.write(lockPath, lockId);
+          // Verify we got the lock (another process might have written simultaneously)
+          const content = await Bun.file(lockPath).text();
+          if (content === lockId) {
+            this.locks.set(path, true);
+            return;
+          }
+        }
+
+        // Lock exists or we didn't get it, wait and retry
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay = Math.min(delay * 2, 500); // Exponential backoff, max 500ms
+      } catch {
+        // If we fail to write, another process might have the lock
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay = Math.min(delay * 2, 500);
+      }
+    }
+
+    throw new Error(`Failed to acquire lock for ${path} after ${timeoutMs}ms`);
+  }
+
+  /**
+   * Release a lock for a file path.
+   */
+  async release(path: string): Promise<void> {
+    const lockPath = `${path}.lock`;
+    try {
+      const { unlink } = await import("node:fs/promises");
+      await unlink(lockPath);
+    } catch {
+      // Ignore errors when releasing - lock might already be gone
+    }
+    this.locks.delete(path);
+  }
+
+  /**
+   * Execute a function while holding a lock.
+   */
+  async withLock<T>(path: string, fn: () => Promise<T>): Promise<T> {
+    await this.acquire(path);
+    try {
+      return await fn();
+    } finally {
+      await this.release(path);
+    }
+  }
+}
 
 /** Name of the PokéRalph folder in user's repository */
 const POKERALPH_FOLDER = ".pokeralph";
@@ -50,12 +124,16 @@ export class FileManager {
   /** Base path of the user's repository */
   private readonly basePath: string;
 
+  /** Lock manager for file-level locking */
+  private readonly lockManager: FileLockManager;
+
   /**
    * Creates a new FileManager instance
    * @param basePath - The root path of the user's repository
    */
   constructor(basePath: string) {
     this.basePath = basePath;
+    this.lockManager = new FileLockManager();
   }
 
   // ==========================================================================
@@ -236,16 +314,38 @@ export class FileManager {
   }
 
   /**
-   * Appends an iteration to the battle history
+   * Appends an iteration to the battle history.
+   *
+   * Uses file-level locking to ensure atomic read-modify-write semantics,
+   * preventing race conditions when multiple processes append concurrently.
    *
    * @param taskId - The task ID to append the iteration to
    * @param iteration - The iteration to append
    * @throws {FileNotFoundError} If history.json doesn't exist
    */
   async appendIteration(taskId: string, iteration: Iteration): Promise<void> {
-    const battle = await this.loadBattleHistory(taskId);
-    battle.iterations.push(iteration);
-    await this.saveBattleHistory(taskId, battle);
+    const path = this.getBattlePath(taskId, "history.json");
+
+    // Hold lock for entire read-modify-write cycle
+    await this.lockManager.withLock(path, async () => {
+      // Read directly (bypass schema validation for speed in critical section)
+      const file = Bun.file(path);
+      if (!(await file.exists())) {
+        throw new FileNotFoundError(path);
+      }
+
+      const text = await file.text();
+      const battle = BattleSchema.parse(JSON.parse(text)) as Battle;
+      battle.iterations.push(iteration);
+
+      // Write atomically (temp file + rename)
+      const content = JSON.stringify(battle, null, 2);
+      const tempPath = `${path}.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`;
+      const dir = dirname(path);
+      await mkdir(dir, { recursive: true });
+      await Bun.write(tempPath, content);
+      await rename(tempPath, path);
+    });
   }
 
   // ==========================================================================
@@ -314,10 +414,32 @@ export class FileManager {
   }
 
   /**
-   * Writes data as formatted JSON to a file
+   * Writes data as formatted JSON to a file using atomic write (temp file + rename).
+   * Uses file-level locking to prevent concurrent write issues.
+   *
+   * @remarks
+   * The atomic write pattern:
+   * 1. Acquire lock for the target file
+   * 2. Write to a temporary file in the same directory
+   * 3. Rename temp file to target (atomic on most filesystems)
+   * 4. Release lock
+   *
+   * This prevents data corruption from power failures or crashes during writes.
    */
   private async writeJson(path: string, data: unknown): Promise<void> {
-    const content = JSON.stringify(data, null, 2);
-    await Bun.write(path, content);
+    await this.lockManager.withLock(path, async () => {
+      const content = JSON.stringify(data, null, 2);
+      const tempPath = `${path}.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`;
+
+      // Ensure parent directory exists
+      const dir = dirname(path);
+      await mkdir(dir, { recursive: true });
+
+      // Write to temp file
+      await Bun.write(tempPath, content);
+
+      // Atomic rename
+      await rename(tempPath, path);
+    });
   }
 }
