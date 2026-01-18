@@ -82,6 +82,30 @@ export {
   type ProjectDetection,
 } from "./project-detection.ts";
 
+// PreflightService - runs pre-battle validation checks
+export {
+  PreflightService,
+  tokenizeCommand,
+  toPreflightCheckResultDTO,
+  toPreflightReportDTO,
+  generatePreflightToken,
+  validatePreflightToken,
+  assessTaskRisk,
+  type PreflightCheckCategory,
+  type PreflightCheckSeverity,
+  type PreflightContext,
+  type PreflightResult,
+  type FixResult,
+  type PreflightCheck,
+  type PreflightCheckResult,
+  type PreflightCheckResultDTO,
+  type PreflightSummary,
+  type PreflightReport,
+  type PreflightReportDTO,
+  type TaskRisk,
+  type TaskRiskFactor,
+} from "./preflight-service.ts";
+
 // Custom error classes
 export { FileNotFoundError, ValidationError } from "./errors.ts";
 

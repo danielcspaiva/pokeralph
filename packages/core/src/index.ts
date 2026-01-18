@@ -85,6 +85,27 @@ export {
   UNKNOWN_PROJECT_EXPLANATION,
   type ProjectType,
   type ProjectDetection,
+  // PreflightService
+  PreflightService,
+  tokenizeCommand,
+  toPreflightCheckResultDTO,
+  toPreflightReportDTO,
+  generatePreflightToken,
+  validatePreflightToken,
+  assessTaskRisk,
+  type PreflightCheckCategory,
+  type PreflightCheckSeverity,
+  type PreflightContext,
+  type PreflightResult,
+  type FixResult,
+  type PreflightCheck,
+  type PreflightCheckResult,
+  type PreflightCheckResultDTO,
+  type PreflightSummary,
+  type PreflightReport,
+  type PreflightReportDTO,
+  type TaskRisk,
+  type TaskRiskFactor,
 } from "./services/index.ts";
 
 // Re-export all types
