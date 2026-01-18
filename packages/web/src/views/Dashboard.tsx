@@ -5,9 +5,9 @@
  * Provides quick actions to start battles or create new PRDs.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus, Play, ClipboardList, Loader2 } from "lucide-react";
+import { Plus, Play, ClipboardList, Loader2, Search, ArrowUpDown } from "lucide-react";
 import {
   usePRD,
   useTasks,
@@ -22,12 +22,25 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 /**
  * Filter options for task list
  */
 type TaskFilter = "all" | "pending" | "in_progress" | "completed" | "failed";
+
+/**
+ * Sort options per spec (04-dashboard.md lines 385-392)
+ */
+type TaskSort = "priority_asc" | "priority_desc" | "status" | "created_asc" | "created_desc" | "name";
 
 /**
  * Filter configuration
@@ -47,6 +60,89 @@ const filterConfigs: Record<TaskFilter, FilterConfig> = {
   completed: { label: "Done", filter: (t) => t.status === "completed" },
   failed: { label: "Failed", filter: (t) => t.status === "failed" },
 };
+
+/**
+ * Sort configuration per spec (04-dashboard.md lines 385-392)
+ */
+interface SortConfig {
+  label: string;
+  compare: (a: Task, b: Task) => number;
+}
+
+const sortConfigs: Record<TaskSort, SortConfig> = {
+  priority_asc: {
+    label: "Priority (Low → High)",
+    compare: (a, b) => a.priority - b.priority,
+  },
+  priority_desc: {
+    label: "Priority (High → Low)",
+    compare: (a, b) => b.priority - a.priority,
+  },
+  status: {
+    label: "Status",
+    compare: (a, b) => {
+      const order = ["in_progress", "pending", "paused", "completed", "failed"];
+      return order.indexOf(a.status) - order.indexOf(b.status);
+    },
+  },
+  created_asc: {
+    label: "Oldest First",
+    compare: (a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""),
+  },
+  created_desc: {
+    label: "Newest First",
+    compare: (a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""),
+  },
+  name: {
+    label: "Name (A → Z)",
+    compare: (a, b) => a.title.localeCompare(b.title),
+  },
+};
+
+/**
+ * Local storage key for persisting dashboard preferences per spec (04-dashboard.md line 51)
+ */
+const DASHBOARD_PREFS_KEY = "pokeralph-dashboard-prefs";
+
+/**
+ * Dashboard preferences interface
+ */
+interface DashboardPrefs {
+  filter: TaskFilter;
+  sort: TaskSort;
+  search: string;
+}
+
+/**
+ * Load dashboard preferences from localStorage
+ */
+function loadDashboardPrefs(): DashboardPrefs {
+  try {
+    const stored = localStorage.getItem(DASHBOARD_PREFS_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return {
+        filter: parsed.filter ?? "all",
+        sort: parsed.sort ?? "priority_asc",
+        search: "", // Don't persist search
+      };
+    }
+  } catch {
+    // Ignore parse errors
+  }
+  return { filter: "all", sort: "priority_asc", search: "" };
+}
+
+/**
+ * Save dashboard preferences to localStorage
+ */
+function saveDashboardPrefs(prefs: Omit<DashboardPrefs, "search">): void {
+  try {
+    localStorage.setItem(DASHBOARD_PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 /**
  * Stats card component
@@ -172,7 +268,11 @@ export function Dashboard() {
   const setPRD = useAppStore((state) => state.setPRD);
   const navigate = useNavigate();
 
-  const [activeFilter, setActiveFilter] = useState<TaskFilter>("all");
+  // Load preferences from localStorage per spec (04-dashboard.md line 51)
+  const [prefs] = useState(() => loadDashboardPrefs());
+  const [activeFilter, setActiveFilter] = useState<TaskFilter>(prefs.filter);
+  const [activeSort, setActiveSort] = useState<TaskSort>(prefs.sort);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isStartingBattle, setIsStartingBattle] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -192,8 +292,30 @@ export function Dashboard() {
     loadPRD();
   }, [setPRD]);
 
-  // Filter tasks based on active filter
-  const filteredTasks = tasks.filter(filterConfigs[activeFilter].filter);
+  // Persist filter/sort preferences per spec (04-dashboard.md line 51)
+  useEffect(() => {
+    saveDashboardPrefs({ filter: activeFilter, sort: activeSort });
+  }, [activeFilter, activeSort]);
+
+  // Filter, search, and sort tasks per spec (04-dashboard.md US-DB-4)
+  const filteredTasks = useMemo(() => {
+    let result = tasks.filter(filterConfigs[activeFilter].filter);
+
+    // Search by title/description per spec (04-dashboard.md line 50)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter(
+        (t) =>
+          t.title.toLowerCase().includes(query) ||
+          t.description.toLowerCase().includes(query)
+      );
+    }
+
+    // Sort per spec (04-dashboard.md lines 385-392)
+    result = [...result].sort(sortConfigs[activeSort].compare);
+
+    return result;
+  }, [tasks, activeFilter, searchQuery, activeSort]);
 
   // Handle starting next battle
   const handleStartBattle = async () => {
@@ -280,30 +402,73 @@ export function Dashboard() {
         <StatCard label="Failed" value={counts.failed} variant="error" />
       </div>
 
-      {/* Task filters */}
-      <Tabs
-        value={activeFilter}
-        onValueChange={(v) => setActiveFilter(v as TaskFilter)}
-      >
-        <TabsList>
-          {(Object.keys(filterConfigs) as TaskFilter[]).map((filter) => (
-            <TabsTrigger key={filter} value={filter} className="gap-2">
-              {filterConfigs[filter].label}
-              {filter !== "all" && (
-                <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-xs">
-                  {filter === "pending"
-                    ? counts.pending
-                    : filter === "in_progress"
-                      ? counts.in_progress
-                      : filter === "completed"
-                        ? counts.completed
-                        : counts.failed}
-                </Badge>
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      {/* Task filters, search, and sort per spec (04-dashboard.md lines 213-216) */}
+      <div className="space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {/* Status filter tabs */}
+          <Tabs
+            value={activeFilter}
+            onValueChange={(v) => setActiveFilter(v as TaskFilter)}
+          >
+            <TabsList>
+              {(Object.keys(filterConfigs) as TaskFilter[]).map((filter) => (
+                <TabsTrigger key={filter} value={filter} className="gap-2">
+                  {filterConfigs[filter].label}
+                  {filter !== "all" && (
+                    <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-xs">
+                      {filter === "pending"
+                        ? counts.pending
+                        : filter === "in_progress"
+                          ? counts.in_progress
+                          : filter === "completed"
+                            ? counts.completed
+                            : counts.failed}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+
+          {/* Sort selector and search per spec (04-dashboard.md lines 49-50) */}
+          <div className="flex gap-2">
+            {/* Sort dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <ArrowUpDown className="h-4 w-4" />
+                  <span className="hidden sm:inline">{sortConfigs[activeSort].label}</span>
+                  <span className="sm:hidden">Sort</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuRadioGroup
+                  value={activeSort}
+                  onValueChange={(v) => setActiveSort(v as TaskSort)}
+                >
+                  {(Object.keys(sortConfigs) as TaskSort[]).map((sort) => (
+                    <DropdownMenuRadioItem key={sort} value={sort}>
+                      {sortConfigs[sort].label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* Search input per spec (04-dashboard.md line 50) */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[hsl(var(--screen-muted-fg))]" />
+              <Input
+                type="search"
+                placeholder="Search tasks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-9 w-40 pl-8 sm:w-56"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Task list */}
       <div className="space-y-2">
@@ -312,7 +477,20 @@ export function Dashboard() {
         ) : (
           <Card>
             <CardContent className="py-8 text-center text-[hsl(var(--screen-muted-fg))]">
-              No {activeFilter === "all" ? "tasks" : filterConfigs[activeFilter].label.toLowerCase()} found.
+              {searchQuery.trim() ? (
+                <>
+                  No tasks match "{searchQuery}"
+                  <Button
+                    variant="link"
+                    className="ml-1 p-0 h-auto"
+                    onClick={() => setSearchQuery("")}
+                  >
+                    Clear search
+                  </Button>
+                </>
+              ) : (
+                `No ${activeFilter === "all" ? "tasks" : filterConfigs[activeFilter].label.toLowerCase()} found.`
+              )}
             </CardContent>
           </Card>
         )}

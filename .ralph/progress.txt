@@ -644,3 +644,106 @@
 - Lint: PASS (0 new errors in changed files)
 - Tests: 643 pass, 0 fail
 
+**Commit:** 9f8defd
+
+## Task 015: Verify auto-reconnect against spec - COMPLETED
+
+**Spec:** 07-websocket.md
+**Files Modified:**
+- packages/web/src/api/websocket.ts
+- packages/web/src/stores/app-store.ts
+
+**Changes Made:**
+
+1. Added exponential backoff with max delay cap per spec (lines 494-505, 502):
+   - Added `maxReconnectDelay` option (default 30000ms = 30s per spec)
+   - Updated `scheduleReconnect()` to use `Math.min()` to cap delay at maxReconnectDelay
+   - Exponential backoff: delay = min(baseDelay * 2^(attempts-1), maxDelay)
+
+2. Added new connection states per spec (lines 1142-1149):
+   - Added `resyncing` state: when fetching state after reconnect
+   - Added `offline` state: when max reconnection attempts reached
+   - Updated `ConnectionState` type to include all 6 states
+
+3. Added ConnectionStatus interface for UI feedback (lines 1152-1165):
+   - `state`: current ConnectionState
+   - `lastConnected`: ISO timestamp of last successful connection
+   - `reconnectAttempt`: current attempt number
+   - `maxAttempts`: configured maximum attempts
+   - `nextAttemptIn`: milliseconds until next reconnect attempt (or null)
+
+4. Added state resync after reconnection per spec (lines 784-967):
+   - Added `setResyncCallback()` method to register resync handler
+   - `onopen` handler checks if reconnecting and calls resync callback
+   - Sets state to "resyncing" during resync, then "connected"
+
+5. Implemented resyncStateFromServer() in app-store:
+   - Fetches all state in parallel via REST APIs for efficiency
+   - Syncs: working dir, config, PRD, battle state, planning state
+   - Uses Promise.allSettled() for graceful partial failure handling
+   - Logs each sync step with colored console output
+
+6. Updated setupWebSocketListeners():
+   - Registers resyncStateFromServer as the resync callback
+   - Ensures state is synced after any WebSocket reconnection
+
+**Acceptance Criteria Status:**
+- [x] Exponential backoff per spec (1s start, doubles, max 30s)
+- [x] State resync per spec (fetches current state via REST after reconnect)
+- [x] Event replay if in spec - N/A (spec notes this as future enhancement)
+- [x] UI feedback per spec (ConnectionStatus interface with all required fields)
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 643 pass, 0 fail
+
+**Commit:** 7afb9fc
+
+## Task 016: Verify Dashboard against spec - COMPLETED
+
+**Spec:** 04-dashboard.md
+**Files Modified:**
+- packages/web/src/views/Dashboard.tsx
+
+**Changes Made:**
+
+1. Added search input per spec (04-dashboard.md line 50):
+   - Search bar filters tasks by title/description
+   - Case-insensitive search
+   - Clear search button in empty state
+
+2. Added sort selector per spec (04-dashboard.md lines 385-392):
+   - Dropdown with 6 sort options: priority_asc (default), priority_desc, status, created_asc, created_desc, name
+   - Uses DropdownMenu component for consistent UI
+
+3. Persist filter/sort preferences per spec (04-dashboard.md line 51):
+   - Saves filter and sort to localStorage key "pokeralph-dashboard-prefs"
+   - Loads preferences on component mount
+   - Search is not persisted (resets on page refresh)
+
+4. Improved empty state messaging:
+   - Shows search query in "No tasks match" message
+   - Includes "Clear search" button for quick reset
+
+**Verification against spec (04-dashboard.md):**
+- Task display per spec: Tasks displayed in list/grid with status indicators ✓
+- Status indicators per spec: Color-coded badges per status ✓
+- Filtering per spec: Filter tabs by status (all, pending, in_progress, completed, failed) ✓
+- Search per spec: Search by title/description ✓
+- Sort per spec: 6 sort options with dropdown selector ✓
+- Preference persistence per spec: Filter/sort saved to localStorage ✓
+
+**Acceptance Criteria Status:**
+- [x] Task display per spec
+- [x] Status indicators per spec
+- [x] Filtering per spec
+- [x] Quick actions per spec (Start Task button in header)
+
+**Verification:**
+- Typecheck: PASS (0 errors)
+- Lint: PASS (0 errors in changed files)
+- Tests: 643 pass, 0 fail
+
+**Commit:** (pending)
+
