@@ -8,6 +8,12 @@
  */
 
 import type { Task, PRD, Progress } from "../types/index.ts";
+import {
+  COMPLETION_BLOCK_START,
+  COMPLETION_BLOCK_END,
+  COMPLETION_PROTOCOL_VERSION,
+  SIMPLE_COMPLETION_SIGIL,
+} from "./structured-completion.ts";
 
 /**
  * Context for task execution prompts
@@ -137,8 +143,10 @@ export const PROGRESS_UPDATE_SCHEMA = {
 
 /**
  * Completion sigil that Claude emits when task is complete
+ * @remarks For backward compatibility, this is the simple sigil.
+ * The structured completion block is preferred (see structured-completion.ts)
  */
-export const COMPLETION_SIGIL = "<promise>COMPLETE</promise>";
+export const COMPLETION_SIGIL = SIMPLE_COMPLETION_SIGIL;
 
 /**
  * Template constants for building prompts
@@ -220,13 +228,37 @@ All feedback loops must pass before the task is considered complete.`,
 3. Update progress.json to reflect completion`,
 
   /**
-   * Completion instructions
+   * Completion instructions (using structured completion protocol)
    */
   COMPLETION_INSTRUCTIONS: `When you have successfully completed ALL acceptance criteria and all feedback loops pass:
-1. Update progress.json with completionDetected: true
-2. Output the completion sigil: ${COMPLETION_SIGIL}
 
-DO NOT output the completion sigil until ALL criteria are met.`,
+1. Update progress.json with completionDetected: true
+2. Output a structured completion block (PREFERRED):
+
+${COMPLETION_BLOCK_START}
+{
+  "type": "BATTLE_COMPLETE",
+  "version": ${COMPLETION_PROTOCOL_VERSION},
+  "taskId": "{taskId}",
+  "summary": "Brief description of what was implemented",
+  "acceptanceCriteriaMet": [
+    { "criterion": "...", "met": true, "evidence": "..." }
+  ],
+  "filesChanged": ["file1.ts", "file2.ts"],
+  "testsAdded": 0,
+  "confidence": "high",
+  "notes": "Optional notes"
+}
+${COMPLETION_BLOCK_END}
+
+Confidence levels:
+- "high": All criteria clearly met with tests
+- "medium": Criteria met but edge cases may exist
+- "low": Unsure about some criteria
+
+For backward compatibility, you may also use the simple sigil: ${SIMPLE_COMPLETION_SIGIL}
+
+DO NOT output the completion block until ALL criteria are met and ALL feedback loops pass.`,
 } as const;
 
 /**
@@ -391,11 +423,11 @@ Begin by asking your first clarifying question.`;
         .replace("{title}", task.title));
     }
 
-    // Completion instructions
+    // Completion instructions with task-specific details
     sections.push("");
     sections.push("## Completion");
     sections.push("");
-    sections.push(TEMPLATES.COMPLETION_INSTRUCTIONS);
+    sections.push(TEMPLATES.COMPLETION_INSTRUCTIONS.replace("{taskId}", task.id));
 
     // Constraints
     sections.push("");

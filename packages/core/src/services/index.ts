@@ -234,6 +234,34 @@ export {
   type SummaryContext,
 } from "./summary-service.ts";
 
+// StructuredCompletion - structured completion protocol for battle completion
+export {
+  // Parsing and detection
+  extractCompletionBlock,
+  parseCompletionSignal,
+  isCompletionSignal,
+  detectCompletion,
+  isStructuredCompletion,
+  isSigilCompletion,
+  // Validation
+  validateCompletion,
+  isCompletionValid,
+  // Prompt helpers
+  getStructuredCompletionInstructions,
+  createSampleCompletionSignal,
+  // Constants
+  COMPLETION_BLOCK_START,
+  COMPLETION_BLOCK_END,
+  SIMPLE_COMPLETION_SIGIL,
+  COMPLETION_PROTOCOL_VERSION,
+  // Types
+  type CompletionConfidence,
+  type AcceptanceCriterionStatus,
+  type CompletionSignal,
+  type CompletionValidation,
+  type CompletionDetectionResult,
+} from "./structured-completion.ts";
+
 // Custom error classes
 export { FileNotFoundError, ValidationError } from "./errors.ts";
 

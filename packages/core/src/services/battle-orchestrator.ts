@@ -15,7 +15,11 @@ import type { ProgressWatcher } from "./progress-watcher.ts";
 import type { FeedbackRunner, FeedbackLoopResult } from "./feedback-runner.ts";
 import { GitService } from "./git-service.ts";
 import type { PromptBuilder, TaskContext } from "./prompt-builder.ts";
-import { COMPLETION_SIGIL } from "./prompt-builder.ts";
+import {
+  detectCompletion,
+  type CompletionSignal,
+  type CompletionValidation,
+} from "./structured-completion.ts";
 import type {
   Task,
   Config,
@@ -77,7 +81,12 @@ export interface BattleOrchestratorEvents {
   /** Emitted when progress changes */
   progress_update: [{ taskId: string; progress: Progress }];
   /** Emitted when completion is detected */
-  completion_detected: [{ taskId: string }];
+  completion_detected: [{
+    taskId: string;
+    type: "structured" | "sigil";
+    signal?: CompletionSignal;
+    validation?: CompletionValidation;
+  }];
   /** Emitted on error */
   error: [{ message: string; code?: string; details?: unknown }];
 }
@@ -541,6 +550,9 @@ export class BattleOrchestrator extends EventEmitter {
     success: boolean;
     output: string;
     completionDetected: boolean;
+    completionType?: "structured" | "sigil";
+    completionSignal?: CompletionSignal;
+    completionValidation?: CompletionValidation;
     filesChanged: string[];
     commitHash?: string;
     error?: string;
@@ -584,11 +596,35 @@ export class BattleOrchestrator extends EventEmitter {
       output: claudeResult.output,
     });
 
-    // Check for completion sigil in output
-    const completionDetected = claudeResult.output.includes(COMPLETION_SIGIL);
+    // Run feedback loops first (needed for structured completion validation)
+    const feedbackResults = await this.runFeedbackLoops(taskId);
+    const allPassed = feedbackResults.every((r) => r.passed);
+
+    // Convert feedback loop results to FeedbackResults record for iteration history
+    const feedbackResultsRecord: FeedbackResults = {};
+    for (const result of feedbackResults) {
+      feedbackResultsRecord[result.name] = {
+        passed: result.passed,
+        output: result.output,
+        duration: result.duration,
+      };
+    }
+
+    // Check for completion using structured detection (with sigil fallback)
+    const completionResult = detectCompletion(
+      claudeResult.output,
+      task,
+      feedbackResultsRecord
+    );
+    const completionDetected = completionResult.detected;
 
     if (completionDetected) {
-      this.emit("completion_detected", { taskId });
+      this.emit("completion_detected", {
+        taskId,
+        type: completionResult.type as "structured" | "sigil",
+        signal: completionResult.signal,
+        validation: completionResult.validation,
+      });
 
       // Update progress
       const progress = await this.loadOrCreateProgress(taskId);
@@ -596,10 +632,6 @@ export class BattleOrchestrator extends EventEmitter {
       progress.lastUpdate = new Date().toISOString();
       await this.deps.fileManager.saveProgress(taskId, progress);
     }
-
-    // Run feedback loops
-    const feedbackResults = await this.runFeedbackLoops(taskId);
-    const allPassed = feedbackResults.every((r) => r.passed);
 
     // Get changed files from git (if it's a git repo)
     let filesChanged: string[] = [];
@@ -659,20 +691,13 @@ export class BattleOrchestrator extends EventEmitter {
       }
     }
 
-    // Convert feedback loop results to FeedbackResults record for iteration history
-    const feedbackResultsRecord: FeedbackResults = {};
-    for (const result of feedbackResults) {
-      feedbackResultsRecord[result.name] = {
-        passed: result.passed,
-        output: result.output,
-        duration: result.duration,
-      };
-    }
-
     return {
       success: claudeResult.exitCode === 0 && allPassed,
       output: claudeResult.output,
       completionDetected,
+      completionType: completionResult.type !== "none" ? completionResult.type : undefined,
+      completionSignal: completionResult.signal,
+      completionValidation: completionResult.validation,
       filesChanged,
       commitHash,
       error: claudeResult.error,
@@ -884,7 +909,9 @@ export class BattleOrchestrator extends EventEmitter {
     });
 
     this.deps.progressWatcher.on("complete", () => {
-      this.emit("completion_detected", { taskId });
+      // Progress watcher detects completion from progress.json file
+      // We don't know the completion type here, so use "sigil" as default
+      this.emit("completion_detected", { taskId, type: "sigil" as const });
     });
 
     this.deps.progressWatcher.on("error", (progress) => {
