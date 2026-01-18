@@ -155,7 +155,7 @@ Your goal is to complete tasks efficiently and accurately.`,
    */
   PLANNING_INTRO: `You are in PLANNING MODE. Your goal is to help refine an idea into a well-structured PRD (Product Requirements Document).
 
-Ask clarifying questions to understand:
+IMPORTANT: Ask 2-5 clarifying questions FIRST before generating the PRD. Questions should cover:
 - The scope and goals of the project
 - Technical constraints and preferences
 - Priority of features
@@ -260,9 +260,11 @@ ${idea}
 
 ## Your Task
 
-1. Ask clarifying questions to understand the full scope
-2. Help the user refine their idea
+1. Ask 2-5 clarifying questions FIRST to understand the full scope
+2. Help the user refine their idea through multi-turn conversation
 3. When ready, generate a PRD with DETAILED TASKS in JSON format
+
+IMPORTANT: Ask questions FIRST before generating the PRD.
 
 ## PRD Output Format
 
