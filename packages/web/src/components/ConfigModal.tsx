@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Config, ExecutionMode } from "@pokeralph/core/types";
 import { useConfig, useAppStore } from "../stores/app-store";
-import { updateConfig as updateConfigApi } from "../api/client";
+import { updateConfig as updateConfigApi, resetConfig as resetConfigApi } from "../api/client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -48,6 +48,15 @@ interface ValidationErrors {
 }
 
 /**
+ * Validation warnings for form fields (non-blocking)
+ */
+interface ValidationWarnings {
+  maxIterationsPerTask?: string;
+  timeoutMinutes?: string;
+  pollingIntervalMs?: string;
+}
+
+/**
  * Configuration modal for adjusting PokéRalph settings
  */
 export function ConfigModal({ isOpen, onClose }: ConfigModalProps) {
@@ -68,8 +77,10 @@ export function ConfigModal({ isOpen, onClose }: ConfigModalProps) {
 
   // UI state
   const [isSaving, setIsSaving] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errors, setErrors] = useState<ValidationErrors>({});
+  const [warnings, setWarnings] = useState<ValidationWarnings>({});
 
   // Initialize form with current config when modal opens
   useEffect(() => {
@@ -87,25 +98,43 @@ export function ConfigModal({ isOpen, onClose }: ConfigModalProps) {
 
   /**
    * Validates form fields and returns whether form is valid
+   * Also sets warnings for values that are valid but potentially problematic
    */
   const validateForm = useCallback((): boolean => {
     const newErrors: ValidationErrors = {};
+    const newWarnings: ValidationWarnings = {};
 
-    if (maxIterations < 1 || maxIterations > 50) {
+    // Max iterations: 1-100 per spec (06-configuration.md lines 142-143, 322-325)
+    if (maxIterations < 1 || maxIterations > 100) {
       newErrors.maxIterationsPerTask =
-        "Max iterations must be between 1 and 50";
+        "Max iterations must be between 1 and 100";
+    } else if (maxIterations > 20) {
+      // Warning for high iteration count per spec line 325
+      newWarnings.maxIterationsPerTask =
+        "High iteration count may consume significant resources";
     }
 
-    if (timeoutMinutes < 1 || timeoutMinutes > 120) {
-      newErrors.timeoutMinutes = "Timeout must be between 1 and 120 minutes";
+    // Timeout: 1-60 per spec (06-configuration.md lines 147, 327-330)
+    if (timeoutMinutes < 1 || timeoutMinutes > 60) {
+      newErrors.timeoutMinutes = "Timeout must be between 1 and 60 minutes";
+    } else if (timeoutMinutes > 45) {
+      // Warning for long timeouts per spec line 330
+      newWarnings.timeoutMinutes =
+        "Long timeouts may indicate tasks that are too large";
     }
 
+    // Polling interval: 500-10000 per spec (06-configuration.md lines 147, 339-341)
     if (pollingIntervalMs < 500 || pollingIntervalMs > 10000) {
       newErrors.pollingIntervalMs =
         "Polling interval must be between 500 and 10000 ms";
+    } else if (pollingIntervalMs < 1000) {
+      // Warning for fast polling per spec line 341
+      newWarnings.pollingIntervalMs =
+        "Very fast polling may impact performance";
     }
 
     setErrors(newErrors);
+    setWarnings(newWarnings);
     return Object.keys(newErrors).length === 0;
   }, [maxIterations, timeoutMinutes, pollingIntervalMs]);
 
@@ -116,6 +145,34 @@ export function ConfigModal({ isOpen, onClose }: ConfigModalProps) {
     setFeedbackLoops((prev) =>
       prev.includes(loop) ? prev.filter((l) => l !== loop) : [...prev, loop]
     );
+  };
+
+  /**
+   * Handles resetting configuration to defaults
+   */
+  const handleReset = async () => {
+    setIsResetting(true);
+    setError(null);
+
+    try {
+      const defaultConfig = await resetConfigApi();
+      setConfig(defaultConfig);
+      // Update local form state with defaults
+      setMaxIterations(defaultConfig.maxIterationsPerTask);
+      setMode(defaultConfig.mode);
+      setFeedbackLoops([...defaultConfig.feedbackLoops]);
+      setTimeoutMinutes(defaultConfig.timeoutMinutes);
+      setPollingIntervalMs(defaultConfig.pollingIntervalMs);
+      setAutoCommit(defaultConfig.autoCommit);
+      setErrors({});
+      setWarnings({});
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to reset configuration"
+      );
+    } finally {
+      setIsResetting(false);
+    }
   };
 
   /**
@@ -155,7 +212,17 @@ export function ConfigModal({ isOpen, onClose }: ConfigModalProps) {
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Settings</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle>Settings</DialogTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleReset}
+              disabled={isSaving || isResetting}
+            >
+              {isResetting ? "Resetting..." : "Reset"}
+            </Button>
+          </div>
           <DialogDescription>
             Configure PokéRalph behavior and execution settings.
           </DialogDescription>
@@ -177,19 +244,24 @@ export function ConfigModal({ isOpen, onClose }: ConfigModalProps) {
             <Slider
               id="maxIterations"
               min={1}
-              max={50}
+              max={100}
               step={1}
               value={[maxIterations]}
               onValueChange={(value) => setMaxIterations(value[0] ?? maxIterations)}
             />
             <div className="flex justify-between text-xs text-[hsl(var(--muted-foreground))]">
               <span>1</span>
-              <span>25</span>
               <span>50</span>
+              <span>100</span>
             </div>
             {errors.maxIterationsPerTask && (
               <p className="text-xs text-[hsl(var(--destructive))]">
                 {errors.maxIterationsPerTask}
+              </p>
+            )}
+            {warnings.maxIterationsPerTask && !errors.maxIterationsPerTask && (
+              <p className="text-xs text-[hsl(var(--warning))]">
+                {warnings.maxIterationsPerTask}
               </p>
             )}
           </div>
@@ -261,7 +333,7 @@ export function ConfigModal({ isOpen, onClose }: ConfigModalProps) {
               type="number"
               id="timeoutMinutes"
               min={1}
-              max={120}
+              max={60}
               value={timeoutMinutes}
               onChange={(e) => setTimeoutMinutes(Number(e.target.value))}
               className={cn(
@@ -272,6 +344,11 @@ export function ConfigModal({ isOpen, onClose }: ConfigModalProps) {
             {errors.timeoutMinutes && (
               <p className="text-xs text-[hsl(var(--destructive))]">
                 {errors.timeoutMinutes}
+              </p>
+            )}
+            {warnings.timeoutMinutes && !errors.timeoutMinutes && (
+              <p className="text-xs text-[hsl(var(--warning))]">
+                {warnings.timeoutMinutes}
               </p>
             )}
           </div>
@@ -297,6 +374,11 @@ export function ConfigModal({ isOpen, onClose }: ConfigModalProps) {
                 {errors.pollingIntervalMs}
               </p>
             )}
+            {warnings.pollingIntervalMs && !errors.pollingIntervalMs && (
+              <p className="text-xs text-[hsl(var(--warning))]">
+                {warnings.pollingIntervalMs}
+              </p>
+            )}
           </div>
 
           <Separator />
@@ -313,10 +395,10 @@ export function ConfigModal({ isOpen, onClose }: ConfigModalProps) {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={isSaving}>
+          <Button variant="outline" onClick={onClose} disabled={isSaving || isResetting}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isSaving}>
+          <Button onClick={handleSave} disabled={isSaving || isResetting}>
             {isSaving ? "Saving..." : "Save"}
           </Button>
         </DialogFooter>

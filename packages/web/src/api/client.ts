@@ -298,6 +298,15 @@ export async function updateConfig(config: Partial<Config>): Promise<Config> {
   });
 }
 
+/**
+ * Resets the configuration to default values
+ */
+export async function resetConfig(): Promise<Config> {
+  return request<Config>("/api/config/reset", {
+    method: "POST",
+  });
+}
+
 // ==========================================================================
 // Working Directory Endpoints
 // ==========================================================================
