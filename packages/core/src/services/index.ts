@@ -173,6 +173,32 @@ export {
   type VerifyManualFixResult,
 } from "./recovery-service.ts";
 
+// CheckpointService - manages battle checkpoints for recovery
+export {
+  // Storage implementations
+  CommitCheckpointStorage,
+  PatchCheckpointStorage,
+  // Factory and utility functions
+  getCheckpointStorage,
+  createCheckpoint,
+  restoreCheckpoint,
+  createInitialCheckpoint,
+  findCheckpointByIteration,
+  getInitialCheckpoint,
+  validateCheckpoint,
+  // Cleanup functions
+  cleanupCheckpoints,
+  getCheckpointsToRemove,
+  DEFAULT_RETENTION_POLICY,
+  // Types
+  type CheckpointStorageType,
+  type Checkpoint,
+  type CheckpointStorage,
+  type RollbackResult,
+  type RollbackOptions,
+  type CheckpointRetentionPolicy,
+} from "./checkpoint-service.ts";
+
 // Custom error classes
 export { FileNotFoundError, ValidationError } from "./errors.ts";
 

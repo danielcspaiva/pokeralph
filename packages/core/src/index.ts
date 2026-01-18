@@ -136,6 +136,25 @@ export {
   type BattleFailure,
   type BattleContext,
   type FailureSeverity,
+  // CheckpointService
+  CommitCheckpointStorage,
+  PatchCheckpointStorage,
+  getCheckpointStorage,
+  createCheckpoint,
+  restoreCheckpoint,
+  createInitialCheckpoint,
+  findCheckpointByIteration,
+  getInitialCheckpoint,
+  validateCheckpoint,
+  cleanupCheckpoints,
+  getCheckpointsToRemove,
+  DEFAULT_RETENTION_POLICY,
+  type CheckpointStorageType,
+  type Checkpoint,
+  type CheckpointStorage,
+  type RollbackResult,
+  type RollbackOptions,
+  type CheckpointRetentionPolicy,
 } from "./services/index.ts";
 
 // Re-export all types
