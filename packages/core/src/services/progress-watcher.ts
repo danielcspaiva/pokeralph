@@ -117,14 +117,19 @@ export class ProgressWatcher extends EventEmitter {
    * Starts watching a task's progress.json file
    *
    * @param taskId - The task ID to watch
+   * @param options - Optional watch options
+   * @param options.intervalMs - Override the polling interval for this watch session
    * @throws Error if already watching a task
    */
-  watch(taskId: string): void {
+  watch(taskId: string, options?: { intervalMs?: number }): void {
     if (this.watchState !== null) {
       throw new Error(
         `Already watching task "${this.watchState.taskId}". Call stop() first.`
       );
     }
+
+    // Use provided interval or fall back to default
+    const effectiveIntervalMs = options?.intervalMs ?? this.intervalMs;
 
     this.watchState = {
       taskId,
@@ -137,7 +142,7 @@ export class ProgressWatcher extends EventEmitter {
     // Emit watch_start event
     this.emit("watch_start", taskId);
 
-    // Start polling
+    // Start polling with the effective interval
     this.watchState.intervalId = setInterval(() => {
       this.poll().catch((err) => {
         // Silently ignore file not found errors during initial polling
@@ -147,7 +152,7 @@ export class ProgressWatcher extends EventEmitter {
           console.error("ProgressWatcher poll error:", err);
         }
       });
-    }, this.intervalMs);
+    }, effectiveIntervalMs);
 
     // Do an initial poll immediately
     this.poll().catch(() => {

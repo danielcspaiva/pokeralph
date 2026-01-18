@@ -849,8 +849,9 @@ export class BattleOrchestrator extends EventEmitter {
       }
     });
 
-    // Start watching
-    this.deps.progressWatcher.watch(taskId);
+    // Start watching with config's polling interval (default 2s per spec)
+    const pollingIntervalMs = this.state?.config.pollingIntervalMs;
+    this.deps.progressWatcher.watch(taskId, { intervalMs: pollingIntervalMs });
   }
 
   /**

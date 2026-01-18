@@ -106,6 +106,68 @@ describe("ProgressWatcher", () => {
       expect(progressEvents.length).toBeGreaterThanOrEqual(1);
       expect(progressEvents[0]?.taskId).toBe(taskId);
     });
+
+    test("accepts intervalMs option to override default", async () => {
+      // Create watcher with 2000ms default
+      const customWatcher = new ProgressWatcher({ fileManager: fm, intervalMs: 2000 });
+
+      const progress = createInitialProgress(taskId);
+      await fm.saveProgress(taskId, progress);
+
+      const progressEvents: Progress[] = [];
+      customWatcher.on("progress", (p) => progressEvents.push(p));
+
+      // Watch with faster interval override (50ms)
+      customWatcher.watch(taskId, { intervalMs: 50 });
+
+      // Wait for initial poll
+      await sleep(30);
+      progressEvents.length = 0;
+
+      // Update file
+      progress.currentIteration = 2;
+      progress.lastUpdate = new Date().toISOString();
+      await fm.saveProgress(taskId, progress);
+
+      // With 50ms interval, should detect change quickly
+      await sleep(100);
+
+      expect(progressEvents.length).toBeGreaterThanOrEqual(1);
+      expect(progressEvents[0]?.currentIteration).toBe(2);
+
+      customWatcher.stop();
+    });
+
+    test("uses default interval when option not provided", async () => {
+      // Create watcher with 50ms default interval
+      const customWatcher = new ProgressWatcher({ fileManager: fm, intervalMs: 50 });
+      expect(customWatcher.getIntervalMs()).toBe(50);
+
+      const progress = createInitialProgress(taskId);
+      await fm.saveProgress(taskId, progress);
+
+      const progressEvents: Progress[] = [];
+      customWatcher.on("progress", (p) => progressEvents.push(p));
+
+      // Watch without intervalMs option - should use default 50ms
+      customWatcher.watch(taskId);
+
+      await sleep(30);
+      progressEvents.length = 0;
+
+      // Update file
+      progress.currentIteration = 3;
+      progress.lastUpdate = new Date().toISOString();
+      await fm.saveProgress(taskId, progress);
+
+      // Should detect with default 50ms interval
+      await sleep(100);
+
+      expect(progressEvents.length).toBeGreaterThanOrEqual(1);
+      expect(progressEvents[0]?.currentIteration).toBe(3);
+
+      customWatcher.stop();
+    });
   });
 
   describe("stop", () => {
