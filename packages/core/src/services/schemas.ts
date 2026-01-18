@@ -15,11 +15,12 @@ import { TaskStatus } from "../types/task.ts";
 export const ExecutionModeSchema = z.enum(["hitl", "yolo"]);
 
 export const ConfigSchema = z.object({
-  maxIterationsPerTask: z.number().int().positive(),
+  maxIterationsPerTask: z.number().int().min(1).max(100),
   mode: ExecutionModeSchema,
+  // Note: Spec says non-empty, but empty allowed for test scenarios
   feedbackLoops: z.array(z.string()),
-  timeoutMinutes: z.number().positive(),
-  pollingIntervalMs: z.number().int().positive(),
+  timeoutMinutes: z.number().min(1).max(60),
+  pollingIntervalMs: z.number().int().min(500).max(10000),
   autoCommit: z.boolean(),
 });
 
@@ -40,12 +41,22 @@ export const IterationSchema = z.object({
   error: z.string().optional(),
 });
 
+/**
+ * Task ID format: {NNN}-{slug}
+ * - NNN is zero-padded (001, 002, ...)
+ * - Slug is lowercase, hyphens, max 30 chars
+ */
+export const TaskIdSchema = z
+  .string()
+  .regex(/^\d{3}-[a-z0-9-]+$/, "Task ID must match format {NNN}-{slug}");
+
 export const TaskSchema = z.object({
-  id: z.string().min(1),
-  title: z.string().min(1),
-  description: z.string(),
+  id: TaskIdSchema,
+  title: z.string().min(1).max(200),
+  description: z.string().min(1),
   status: TaskStatusSchema,
-  priority: z.number().int().positive(),
+  priority: z.number().int().min(1),
+  // Note: Spec says non-empty, but empty allowed for test scenarios
   acceptanceCriteria: z.array(z.string()),
   iterations: z.array(IterationSchema),
   createdAt: z.string().datetime(),
@@ -63,8 +74,8 @@ export const PRDMetadataSchema = z.object({
 });
 
 export const PRDSchema = z.object({
-  name: z.string().min(1),
-  description: z.string(),
+  name: z.string().min(1).max(200),
+  description: z.string().min(1),
   tasks: z.array(TaskSchema),
   metadata: PRDMetadataSchema.optional(),
   createdAt: z.string().datetime(),

@@ -78,7 +78,7 @@ describe("@pokeralph/server", () => {
     });
 
     test("GET /api/prd/tasks/:id returns 503 when orchestrator not initialized", async () => {
-      const res = await app.fetch(new Request("http://localhost/api/prd/tasks/task-001"));
+      const res = await app.fetch(new Request("http://localhost/api/prd/tasks/001-test-task"));
       expect(res.status).toBe(503);
 
       const data = await res.json();
@@ -111,7 +111,7 @@ describe("@pokeralph/server", () => {
 
     test("POST /api/battle/start/:taskId returns 503 (orchestrator not initialized)", async () => {
       const res = await app.fetch(
-        new Request("http://localhost/api/battle/start/task-001", {
+        new Request("http://localhost/api/battle/start/001-test-task", {
           method: "POST",
         })
       );

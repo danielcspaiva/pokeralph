@@ -51,7 +51,7 @@ describe("@pokeralph/server WebSocket", () => {
 
     test("preserves complex payload objects", () => {
       const payload = {
-        taskId: "task-001",
+        taskId: "001-test-task",
         progress: {
           currentIteration: 3,
           logs: ["log1", "log2"],
@@ -326,7 +326,7 @@ describe("@pokeralph/server WebSocket", () => {
       ws3Messages.length = 0;
 
       // Broadcast
-      manager.broadcast("battle_start", { taskId: "task-001" });
+      manager.broadcast("battle_start", { taskId: "001-test-task" });
 
       // Each client should receive the message
       expect(ws1Messages.length).toBe(1);
@@ -336,7 +336,7 @@ describe("@pokeralph/server WebSocket", () => {
       // Verify message content
       const msg1 = JSON.parse(ws1Messages[0]!) as WebSocketMessage;
       expect(msg1.type).toBe("battle_start");
-      expect(msg1.payload).toEqual({ taskId: "task-001" });
+      expect(msg1.payload).toEqual({ taskId: "001-test-task" });
     });
 
     test("broadcast removes dead clients on send error", () => {
@@ -623,7 +623,7 @@ describe("@pokeralph/server WebSocket", () => {
 
       // Broadcast a message
       const manager = getWebSocketManager();
-      manager.broadcast("battle_start", { taskId: "task-001", task: { id: "task-001" } });
+      manager.broadcast("battle_start", { taskId: "001-test-task", task: { id: "001-test-task" } });
 
       // Wait for messages
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -632,10 +632,10 @@ describe("@pokeralph/server WebSocket", () => {
       expect(ws2Messages.length).toBe(1);
 
       expect(ws1Messages[0]!.type).toBe("battle_start");
-      expect(ws1Messages[0]!.payload).toHaveProperty("taskId", "task-001");
+      expect(ws1Messages[0]!.payload).toHaveProperty("taskId", "001-test-task");
 
       expect(ws2Messages[0]!.type).toBe("battle_start");
-      expect(ws2Messages[0]!.payload).toHaveProperty("taskId", "task-001");
+      expect(ws2Messages[0]!.payload).toHaveProperty("taskId", "001-test-task");
 
       ws1.close();
       ws2.close();

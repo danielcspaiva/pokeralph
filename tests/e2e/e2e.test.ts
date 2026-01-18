@@ -43,6 +43,19 @@ const getTempDir = () =>
   join(tmpdir(), `pokeralph-e2e-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 /**
+ * Generates a spec-compliant task ID: {NNN}-{slug}
+ */
+function generateTaskId(index: number, title?: string): string {
+  const num = String(index + 1).padStart(3, "0");
+  const slug = (title ?? `test-task-${index + 1}`)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 30);
+  return `${num}-${slug}`;
+}
+
+/**
  * Creates a test PRD for testing
  */
 function createTestPRD(tasks: Partial<Task>[] = []): PRD {
@@ -52,7 +65,7 @@ function createTestPRD(tasks: Partial<Task>[] = []): PRD {
     description: "A project for E2E testing",
     createdAt: now,
     tasks: tasks.map((t, index) => ({
-      id: t.id ?? `task-${String(index + 1).padStart(3, "0")}`,
+      id: t.id ?? generateTaskId(index, t.title),
       title: t.title ?? `Test Task ${index + 1}`,
       description: t.description ?? `Description for test task ${index + 1}`,
       status: t.status ?? TaskStatus.Pending,
@@ -234,7 +247,7 @@ describe("E2E: PRD via API", () => {
   });
 
   test("updates task status via API", async () => {
-    const prd = createTestPRD([{ id: "task-001", title: "Task to Update" }]);
+    const prd = createTestPRD([{ id: "001-test-task", title: "Task to Update" }]);
 
     await fetch(`http://localhost:${port}/api/prd`, {
       method: "PUT",
@@ -243,7 +256,7 @@ describe("E2E: PRD via API", () => {
     });
 
     // Update task status
-    const updateRes = await fetch(`http://localhost:${port}/api/prd/tasks/task-001`, {
+    const updateRes = await fetch(`http://localhost:${port}/api/prd/tasks/001-test-task`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: TaskStatus.InProgress }),
@@ -262,8 +275,8 @@ describe("E2E: PRD via API", () => {
 
   test("deletes task via API", async () => {
     const prd = createTestPRD([
-      { id: "task-001", title: "Task One" },
-      { id: "task-002", title: "Task Two" },
+      { id: "001-test-task", title: "Task One" },
+      { id: "002-test-task", title: "Task Two" },
     ]);
 
     await fetch(`http://localhost:${port}/api/prd`, {
@@ -273,7 +286,7 @@ describe("E2E: PRD via API", () => {
     });
 
     // Delete task
-    const deleteRes = await fetch(`http://localhost:${port}/api/prd/tasks/task-001`, {
+    const deleteRes = await fetch(`http://localhost:${port}/api/prd/tasks/001-test-task`, {
       method: "DELETE",
     });
 
@@ -283,7 +296,7 @@ describe("E2E: PRD via API", () => {
     const prdRes = await fetch(`http://localhost:${port}/api/prd`);
     const updatedPRD = await prdRes.json();
     expect(updatedPRD.tasks.length).toBe(1);
-    expect(updatedPRD.tasks[0].id).toBe("task-002");
+    expect(updatedPRD.tasks[0].id).toBe("002-test-task");
   });
 });
 
@@ -318,7 +331,7 @@ describe("E2E: Battle with WebSocket Events", () => {
         maxIterationsPerTask: 5,
         feedbackLoops: [], // Skip feedback loops for faster tests
         autoCommit: false, // Skip git commits
-        pollingIntervalMs: 50,
+        pollingIntervalMs: 500,
       });
     }
 
@@ -355,7 +368,7 @@ describe("E2E: Battle with WebSocket Events", () => {
 
   test("starts battle attempt via API and receives WebSocket connect", async () => {
     // Create PRD with task
-    const prd = createTestPRD([{ id: "task-001", title: "WebSocket Test Task" }]);
+    const prd = createTestPRD([{ id: "001-test-task", title: "WebSocket Test Task" }]);
     await fileManager.savePRD(prd);
 
     // Connect WebSocket
@@ -375,7 +388,7 @@ describe("E2E: Battle with WebSocket Events", () => {
   });
 
   test("WebSocket broadcasts to multiple clients", async () => {
-    const prd = createTestPRD([{ id: "task-001" }]);
+    const prd = createTestPRD([{ id: "001-test-task" }]);
     await fileManager.savePRD(prd);
 
     // Connect multiple clients
@@ -408,7 +421,7 @@ describe("E2E: Battle with WebSocket Events", () => {
 
     // Broadcast via manager
     const wsManager = getWebSocketManager();
-    wsManager.broadcast("battle_start", { taskId: "task-001" });
+    wsManager.broadcast("battle_start", { taskId: "001-test-task" });
 
     // Wait for messages
     await new Promise((r) => setTimeout(r, 100));
@@ -452,7 +465,7 @@ describe("E2E: YOLO Mode Flow", () => {
         mode: "yolo",
         feedbackLoops: [],
         autoCommit: false,
-        pollingIntervalMs: 50,
+        pollingIntervalMs: 500,
       });
     }
   });
@@ -478,7 +491,7 @@ describe("E2E: YOLO Mode Flow", () => {
   });
 
   test("YOLO mode runs until completion without approval", async () => {
-    const prd = createTestPRD([{ id: "task-001", title: "YOLO Task" }]);
+    const prd = createTestPRD([{ id: "001-test-task", title: "YOLO Task" }]);
     await fileManager.savePRD(prd);
 
     // Connect WebSocket
@@ -536,7 +549,7 @@ describe("E2E: HITL Mode Flow", () => {
         mode: "hitl",
         feedbackLoops: [],
         autoCommit: false,
-        pollingIntervalMs: 50,
+        pollingIntervalMs: 500,
       });
     }
   });
@@ -569,7 +582,7 @@ describe("E2E: HITL Mode Flow", () => {
   });
 
   test("approve endpoint returns 409 when not awaiting approval", async () => {
-    const prd = createTestPRD([{ id: "task-001" }]);
+    const prd = createTestPRD([{ id: "001-test-task" }]);
     await fileManager.savePRD(prd);
 
     // Try to approve when no battle is running
@@ -612,7 +625,7 @@ describe("E2E: Failed Task Status", () => {
         maxIterationsPerTask: 1, // Very low to trigger failure quickly
         feedbackLoops: [],
         autoCommit: false,
-        pollingIntervalMs: 50,
+        pollingIntervalMs: 500,
       });
     }
   });
@@ -639,21 +652,21 @@ describe("E2E: Failed Task Status", () => {
 
   test("task status shows pending initially", async () => {
     const prd = createTestPRD([
-      { id: "task-001", title: "Pending Task", status: TaskStatus.Pending },
+      { id: "001-test-task", title: "Pending Task", status: TaskStatus.Pending },
     ]);
     await fileManager.savePRD(prd);
 
-    const taskRes = await fetch(`http://localhost:${port}/api/prd/tasks/task-001`);
+    const taskRes = await fetch(`http://localhost:${port}/api/prd/tasks/001-test-task`);
     const task = await taskRes.json();
     expect(task.status).toBe(TaskStatus.Pending);
   });
 
   test("can manually update task to failed status", async () => {
-    const prd = createTestPRD([{ id: "task-001", title: "Task to Fail" }]);
+    const prd = createTestPRD([{ id: "001-test-task", title: "Task to Fail" }]);
     await fileManager.savePRD(prd);
 
     // Manually set task to failed (simulating what orchestrator does)
-    const updateRes = await fetch(`http://localhost:${port}/api/prd/tasks/task-001`, {
+    const updateRes = await fetch(`http://localhost:${port}/api/prd/tasks/001-test-task`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: TaskStatus.Failed }),
@@ -670,10 +683,10 @@ describe("E2E: Failed Task Status", () => {
   });
 
   test("battle history endpoint returns null for task without battles", async () => {
-    const prd = createTestPRD([{ id: "task-001" }]);
+    const prd = createTestPRD([{ id: "001-test-task" }]);
     await fileManager.savePRD(prd);
 
-    const historyRes = await fetch(`http://localhost:${port}/api/battle/task-001/history`);
+    const historyRes = await fetch(`http://localhost:${port}/api/battle/001-test-task/history`);
     expect(historyRes.status).toBe(200);
 
     const data = await historyRes.json();
@@ -681,10 +694,10 @@ describe("E2E: Failed Task Status", () => {
   });
 
   test("battle progress endpoint returns null for task without progress", async () => {
-    const prd = createTestPRD([{ id: "task-001" }]);
+    const prd = createTestPRD([{ id: "001-test-task" }]);
     await fileManager.savePRD(prd);
 
-    const progressRes = await fetch(`http://localhost:${port}/api/battle/task-001/progress`);
+    const progressRes = await fetch(`http://localhost:${port}/api/battle/001-test-task/progress`);
     expect(progressRes.status).toBe(200);
 
     const data = await progressRes.json();
